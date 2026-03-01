@@ -1,0 +1,221 @@
+/* ===================================================
+   CivicLens Design System
+   Clean, minimal, neutral — Notion/Linear/Stripe vibes
+   =================================================== */
+
+/* --- Google Font Import --- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* --- Design Tokens --- */
+:root {
+  /* --- Colors: Neutral Palette --- */
+  --cl-white: #ffffff;
+  --cl-gray-25: #fafbfc;
+  --cl-gray-50: #f5f6f8;
+  --cl-gray-100: #ebedf0;
+  --cl-gray-200: #d8dbe2;
+  --cl-gray-300: #b8bcc8;
+  --cl-gray-400: #8f95a5;
+  --cl-gray-500: #6b7280;
+  --cl-gray-600: #4b5263;
+  --cl-gray-700: #363c4a;
+  --cl-gray-800: #252932;
+  --cl-gray-900: #171a21;
+  --cl-black: #0d0f13;
+
+  /* --- Colors: Brand Accent --- */
+  --cl-primary-50: #eef4ff;
+  --cl-primary-100: #d9e6ff;
+  --cl-primary-200: #bcd4ff;
+  --cl-primary-300: #8eb8ff;
+  --cl-primary-400: #5990ff;
+  --cl-primary-500: #3366ff;
+  --cl-primary-600: #1a44f5;
+  --cl-primary-700: #1433e1;
+  --cl-primary-800: #172bb6;
+  --cl-primary-900: #192a8f;
+
+  /* --- Colors: Semantic --- */
+  --cl-success-50: #ecfdf5;
+  --cl-success-500: #10b981;
+  --cl-success-600: #059669;
+  --cl-warning-50: #fffbeb;
+  --cl-warning-500: #f59e0b;
+  --cl-warning-600: #d97706;
+  --cl-danger-50: #fef2f2;
+  --cl-danger-500: #ef4444;
+  --cl-danger-600: #dc2626;
+  --cl-info-50: #eff6ff;
+  --cl-info-500: #3b82f6;
+
+  /* --- Category Colors --- */
+  --cl-cat-bill: #6366f1;
+  --cl-cat-law: #8b5cf6;
+  --cl-cat-executive: #ec4899;
+  --cl-cat-court: #f97316;
+  --cl-cat-local: #14b8a6;
+  --cl-cat-state: #0ea5e9;
+  --cl-cat-federal: #6366f1;
+
+  /* --- Typography --- */
+  --cl-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --cl-font-xs: 0.75rem;      /* 12px */
+  --cl-font-sm: 0.8125rem;    /* 13px */
+  --cl-font-base: 0.875rem;   /* 14px */
+  --cl-font-md: 1rem;         /* 16px */
+  --cl-font-lg: 1.125rem;     /* 18px */
+  --cl-font-xl: 1.25rem;      /* 20px */
+  --cl-font-2xl: 1.5rem;      /* 24px */
+  --cl-font-3xl: 1.875rem;    /* 30px */
+  --cl-font-4xl: 2.25rem;     /* 36px */
+  --cl-line-height-tight: 1.25;
+  --cl-line-height-normal: 1.5;
+  --cl-line-height-relaxed: 1.625;
+  --cl-letter-spacing-tight: -0.025em;
+  --cl-letter-spacing-normal: 0em;
+
+  /* --- Spacing --- */
+  --cl-space-1: 0.25rem;   /* 4px */
+  --cl-space-2: 0.5rem;    /* 8px */
+  --cl-space-3: 0.75rem;   /* 12px */
+  --cl-space-4: 1rem;      /* 16px */
+  --cl-space-5: 1.25rem;   /* 20px */
+  --cl-space-6: 1.5rem;    /* 24px */
+  --cl-space-8: 2rem;      /* 32px */
+  --cl-space-10: 2.5rem;   /* 40px */
+  --cl-space-12: 3rem;     /* 48px */
+  --cl-space-16: 4rem;     /* 64px */
+
+  /* --- Border Radius --- */
+  --cl-radius-sm: 6px;
+  --cl-radius-md: 8px;
+  --cl-radius-lg: 12px;
+  --cl-radius-xl: 16px;
+  --cl-radius-full: 9999px;
+
+  /* --- Shadows --- */
+  --cl-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --cl-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --cl-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --cl-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.06), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+  --cl-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.07), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  --cl-shadow-ring: 0 0 0 3px rgba(51, 102, 255, 0.15);
+
+  /* --- Transitions --- */
+  --cl-transition-fast: 120ms ease;
+  --cl-transition-base: 200ms ease;
+  --cl-transition-slow: 300ms ease;
+  --cl-transition-spring: 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* --- Layout --- */
+  --cl-sidebar-width: 260px;
+  --cl-sidebar-collapsed: 72px;
+  --cl-topbar-height: 56px;
+  --cl-content-max-width: 960px;
+
+  /* --- Z-Index Scale --- */
+  --cl-z-sidebar: 40;
+  --cl-z-topbar: 50;
+  --cl-z-overlay: 60;
+  --cl-z-modal: 70;
+}
+
+/* --- CSS Reset & Base --- */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: var(--cl-font-family);
+  font-size: var(--cl-font-base);
+  line-height: var(--cl-line-height-normal);
+  color: var(--cl-gray-800);
+  background-color: var(--cl-gray-50);
+  overflow: hidden;
+}
+
+a {
+  color: var(--cl-primary-500);
+  text-decoration: none;
+  transition: color var(--cl-transition-fast);
+}
+
+a:hover {
+  color: var(--cl-primary-600);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-size: inherit;
+}
+
+input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+ul, ol {
+  list-style: none;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+/* --- Scrollbar Styling --- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--cl-gray-200);
+  border-radius: var(--cl-radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--cl-gray-300);
+}
+
+/* --- Utility Classes --- */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+/* --- Focus Styles --- */
+:focus-visible {
+  outline: 2px solid var(--cl-primary-400);
+  outline-offset: 2px;
+}
+
+/* --- Selection --- */
+::selection {
+  background-color: var(--cl-primary-100);
+  color: var(--cl-primary-900);
+}

@@ -1,0 +1,310 @@
+/* ===================================================
+   Onboarding Modal Styles
+   =================================================== */
+
+.overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(13, 15, 19, 0.4);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: var(--cl-z-modal);
+    padding: var(--cl-space-4);
+    animation: fadeIn var(--cl-transition-base);
+}
+
+.modal {
+    background: var(--cl-white);
+    border-radius: var(--cl-radius-xl);
+    width: 100%;
+    max-width: 520px;
+    box-shadow: var(--cl-shadow-xl);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp var(--cl-transition-spring);
+}
+
+.header {
+    padding: var(--cl-space-6) var(--cl-space-6) var(--cl-space-4);
+    position: relative;
+}
+
+.closeBtn {
+    position: absolute;
+    top: var(--cl-space-4);
+    right: var(--cl-space-4);
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--cl-radius-full);
+    color: var(--cl-gray-400);
+    transition: all var(--cl-transition-fast);
+}
+
+.closeBtn:hover {
+    background-color: var(--cl-gray-100);
+    color: var(--cl-gray-600);
+}
+
+.closeBtn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.title {
+    font-size: var(--cl-font-2xl);
+    font-weight: 700;
+    color: var(--cl-gray-900);
+    letter-spacing: var(--cl-letter-spacing-tight);
+    margin-bottom: var(--cl-space-2);
+}
+
+.subtitle {
+    font-size: var(--cl-font-base);
+    color: var(--cl-gray-500);
+    line-height: var(--cl-line-height-relaxed);
+}
+
+/* --- Progress Bar --- */
+.progressWrap {
+    padding: 0 var(--cl-space-6);
+    margin-bottom: var(--cl-space-4);
+}
+
+.progressBar {
+    height: 4px;
+    background-color: var(--cl-gray-100);
+    border-radius: var(--cl-radius-full);
+    overflow: hidden;
+}
+
+.progressFill {
+    height: 100%;
+    background-color: var(--cl-primary-500);
+    border-radius: var(--cl-radius-full);
+    transition: width var(--cl-transition-slow);
+}
+
+/* --- Body Views --- */
+.body {
+    padding: var(--cl-space-4) var(--cl-space-6) var(--cl-space-6);
+    flex: 1;
+    overflow-y: auto;
+}
+
+.view {
+    animation: fadeIn var(--cl-transition-base);
+}
+
+/* Location View */
+.inputGroup {
+    margin-bottom: var(--cl-space-5);
+}
+
+.label {
+    display: block;
+    font-size: var(--cl-font-sm);
+    font-weight: 600;
+    color: var(--cl-gray-700);
+    margin-bottom: var(--cl-space-2);
+}
+
+.input {
+    width: 100%;
+    padding: var(--cl-space-3) var(--cl-space-4);
+    border: 1px solid var(--cl-gray-200);
+    border-radius: var(--cl-radius-md);
+    font-size: var(--cl-font-md);
+    color: var(--cl-gray-900);
+    transition: all var(--cl-transition-fast);
+    background-color: var(--cl-gray-50);
+}
+
+.input:focus {
+    outline: none;
+    border-color: var(--cl-primary-400);
+    background-color: var(--cl-white);
+    box-shadow: var(--cl-shadow-ring);
+}
+
+/* Tags View */
+.tagsGrid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--cl-space-3);
+    margin-bottom: var(--cl-space-4);
+}
+
+.tagBtn {
+    padding: var(--cl-space-2) var(--cl-space-4);
+    border: 1px solid var(--cl-gray-200);
+    border-radius: var(--cl-radius-full);
+    font-size: var(--cl-font-sm);
+    font-weight: 500;
+    color: var(--cl-gray-600);
+    background: var(--cl-white);
+    transition: all var(--cl-transition-fast);
+}
+
+.tagBtn:hover {
+    border-color: var(--cl-gray-300);
+    background: var(--cl-gray-50);
+}
+
+.tagBtn.selected {
+    border-color: var(--cl-primary-500);
+    background: var(--cl-primary-50);
+    color: var(--cl-primary-600);
+}
+
+/* Settings View */
+.settingRow {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--cl-space-4);
+    padding: var(--cl-space-4);
+    background: var(--cl-gray-50);
+    border: 1px solid var(--cl-gray-100);
+    border-radius: var(--cl-radius-md);
+    margin-bottom: var(--cl-space-4);
+    cursor: pointer;
+}
+
+.settingInfo {
+    flex: 1;
+}
+
+.settingTitle {
+    font-size: var(--cl-font-base);
+    font-weight: 600;
+    color: var(--cl-gray-900);
+    margin-bottom: 2px;
+}
+
+.settingDesc {
+    font-size: var(--cl-font-sm);
+    color: var(--cl-gray-500);
+    line-height: var(--cl-line-height-relaxed);
+}
+
+/* Custom Toggle Switch */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 24px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--cl-gray-300);
+    transition: .4s;
+    border-radius: 24px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+input:checked+.slider {
+    background-color: var(--cl-primary-500);
+}
+
+input:focus-visible+.slider {
+    box-shadow: 0 0 0 2px var(--cl-white), 0 0 0 4px var(--cl-primary-400);
+}
+
+input:checked+.slider:before {
+    transform: translateX(16px);
+}
+
+/* --- Footer --- */
+.footer {
+    padding: var(--cl-space-4) var(--cl-space-6);
+    border-top: 1px solid var(--cl-gray-100);
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--cl-space-3);
+    background: var(--cl-gray-25);
+}
+
+.btnSkip {
+    padding: var(--cl-space-2) var(--cl-space-4);
+    font-size: var(--cl-font-sm);
+    font-weight: 500;
+    color: var(--cl-gray-500);
+}
+
+.btnSkip:hover {
+    color: var(--cl-gray-800);
+}
+
+.btnPrimary {
+    padding: var(--cl-space-2) var(--cl-space-6);
+    background-color: var(--cl-primary-500);
+    color: var(--cl-white);
+    font-size: var(--cl-font-sm);
+    font-weight: 600;
+    border-radius: var(--cl-radius-md);
+    transition: all var(--cl-transition-fast);
+}
+
+.btnPrimary:hover {
+    background-color: var(--cl-primary-600);
+    transform: translateY(-1px);
+}
+
+.btnPrimary:disabled {
+    background-color: var(--cl-gray-300);
+    cursor: not-allowed;
+    transform: none;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}

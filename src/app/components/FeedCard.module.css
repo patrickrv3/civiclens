@@ -1,0 +1,172 @@
+.feedCard {
+    background: var(--cl-white);
+    border: 1px solid var(--cl-gray-200);
+    border-radius: var(--cl-radius-xl);
+    padding: var(--cl-space-5);
+    transition: all var(--cl-transition-base);
+    box-shadow: var(--cl-shadow-sm);
+}
+
+.feedCard:hover {
+    border-color: var(--cl-gray-300);
+    box-shadow: var(--cl-shadow-md);
+    transform: translateY(-2px);
+}
+
+.feedHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--cl-space-3);
+    gap: var(--cl-space-4);
+}
+
+.feedMeta {
+    display: flex;
+    align-items: center;
+    gap: var(--cl-space-3);
+    flex-wrap: wrap;
+}
+
+.feedBadge {
+    font-size: var(--cl-font-xs);
+    font-weight: 600;
+    padding: var(--cl-space-1) var(--cl-space-2);
+    border-radius: var(--cl-radius-sm);
+    text-transform: uppercase;
+    letter-spacing: var(--cl-letter-spacing-wide);
+}
+
+.badgeBill {
+    background: var(--cl-primary-50);
+    color: var(--cl-primary-700);
+}
+
+.badgeExecutive {
+    background: var(--cl-pink-50);
+    color: var(--cl-pink-700);
+}
+
+.badgeCourt {
+    background: var(--cl-orange-50);
+    color: var(--cl-orange-700);
+}
+
+.badgeLaw {
+    background: var(--cl-green-50);
+    color: var(--cl-green-700);
+}
+
+.feedTime {
+    font-size: var(--cl-font-sm);
+    color: var(--cl-gray-500);
+    font-weight: 500;
+}
+
+.feedImpact {
+    display: flex;
+    align-items: center;
+    gap: var(--cl-space-1);
+    font-size: var(--cl-font-xs);
+    font-weight: 600;
+    color: var(--cl-primary-600);
+    background: var(--cl-primary-50);
+    padding: var(--cl-space-1) var(--cl-space-2);
+    border-radius: var(--cl-radius-full);
+}
+
+.feedImpact svg {
+    width: 14px;
+    height: 14px;
+}
+
+.feedTitle {
+    font-size: var(--cl-font-xl);
+    font-weight: 700;
+    color: var(--cl-gray-900);
+    margin-bottom: var(--cl-space-4);
+    line-height: var(--cl-line-height-tight);
+}
+
+.aiSummary {
+    background: var(--cl-gray-50);
+    border-left: 3px solid var(--cl-primary-500);
+    padding: var(--cl-space-4);
+    border-radius: 0 var(--cl-radius-md) var(--cl-radius-md) 0;
+    margin-bottom: var(--cl-space-4);
+}
+
+.aiHeader {
+    display: flex;
+    align-items: center;
+    gap: var(--cl-space-2);
+    font-size: var(--cl-font-xs);
+    font-weight: 700;
+    color: var(--cl-primary-700);
+    text-transform: uppercase;
+    letter-spacing: var(--cl-letter-spacing-wide);
+    margin-bottom: var(--cl-space-2);
+}
+
+.aiHeader svg {
+    width: 14px;
+    height: 14px;
+}
+
+.aiText {
+    font-size: var(--cl-font-base);
+    color: var(--cl-gray-700);
+    line-height: var(--cl-line-height-relaxed);
+}
+
+.aiText strong {
+    color: var(--cl-gray-900);
+    font-weight: 600;
+}
+
+.feedFooter {
+    display: flex;
+    align-items: center;
+    gap: var(--cl-space-3);
+    border-top: 1px solid var(--cl-gray-100);
+    padding-top: var(--cl-space-4);
+}
+
+.actionBtn {
+    display: flex;
+    align-items: center;
+    gap: var(--cl-space-2);
+    font-size: var(--cl-font-sm);
+    font-weight: 500;
+    color: var(--cl-gray-600);
+    padding: var(--cl-space-2) var(--cl-space-3);
+    border-radius: var(--cl-radius-md);
+    transition: all var(--cl-transition-fast);
+}
+
+.actionBtn:hover {
+    background: var(--cl-gray-100);
+    color: var(--cl-gray-900);
+}
+
+.actionBtn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.actionBtn.activeLike {
+    color: var(--cl-primary-600);
+    background: var(--cl-primary-50);
+    border-color: var(--cl-primary-200);
+}
+
+.actionBtn.activeDislike {
+    color: var(--cl-warning-600);
+    background: var(--cl-warning-50);
+    border-color: var(--cl-warning-200);
+}
+
+.reactionCount {
+    font-weight: 600;
+    margin-left: 2px;
+}
