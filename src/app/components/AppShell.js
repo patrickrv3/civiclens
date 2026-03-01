@@ -4,6 +4,7 @@ import { useState } from 'react';
 import styles from '../layout.module.css';
 import { useProfile } from '../context/ProfileContext';
 import OnboardingModal from './OnboardingModal';
+import AIAssistant from './AIAssistant';
 
 /* --- Simple SVG Icons (inline, no external deps needed) --- */
 const Icons = {
@@ -193,7 +194,7 @@ export default function AppShell({ children }) {
                 {/* Content */}
                 <div className={styles.content}>
                     <div className={styles.contentInner}>
-                        {children}
+                        {activePage === 'assistant' ? <AIAssistant /> : children}
                     </div>
                 </div>
             </main>
