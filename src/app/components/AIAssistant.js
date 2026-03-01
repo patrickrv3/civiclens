@@ -58,18 +58,28 @@ function boldify(text) {
     return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 }
 
-export default function AIAssistant() {
+export default function AIAssistant({ initialQuestion, onQuestionConsumed }) {
     const { profile } = useProfile();
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [isStreaming, setIsStreaming] = useState(false);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
+    const hasHandledInitialRef = useRef(false);
 
     // Auto-scroll to bottom when messages change
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
+
+    // Handle initial question from "Ask AI" button on feed cards
+    useEffect(() => {
+        if (initialQuestion && !hasHandledInitialRef.current) {
+            hasHandledInitialRef.current = true;
+            sendMessage(initialQuestion);
+            if (onQuestionConsumed) onQuestionConsumed();
+        }
+    }, [initialQuestion]);
 
     async function sendMessage(text) {
         const userMessage = text || input.trim();

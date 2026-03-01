@@ -42,7 +42,7 @@ const ThumbsDownIcon = () => (
     </svg>
 );
 
-export default function FeedCard({ item, profile }) {
+export default function FeedCard({ item, profile, onAskAI }) {
     const [reaction, setReaction] = useState(null); // 'like', 'dislike', or null
 
     const handleReaction = (type) => {
@@ -176,7 +176,7 @@ export default function FeedCard({ item, profile }) {
                     </button>
                 </div>
 
-                <button className={styles.actionBtn}>
+                <button className={styles.actionBtn} onClick={() => onAskAI && onAskAI(`Tell me more about the bill "${item.shortTitle || item.title}". What does it do and how could it affect me?`)}>
                     <MessageSquareIcon /> Ask AI
                 </button>
                 {item.sponsors && item.sponsors.length > 0 && (

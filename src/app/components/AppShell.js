@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, cloneElement } from 'react';
 import styles from '../layout.module.css';
 import { useProfile } from '../context/ProfileContext';
 import OnboardingModal from './OnboardingModal';
@@ -83,10 +83,16 @@ export default function AppShell({ children }) {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [activePage, setActivePage] = useState('feed');
     const [modalOpen, setModalOpen] = useState(false);
+    const [askAIQuestion, setAskAIQuestion] = useState(null);
 
     const handleNavClick = (id) => {
         setActivePage(id);
         setSidebarOpen(false);
+    };
+
+    const handleAskAI = (question) => {
+        setAskAIQuestion(question);
+        setActivePage('assistant');
     };
 
     const locationText = getPrimaryLocation() || 'Add your location →';
@@ -194,7 +200,11 @@ export default function AppShell({ children }) {
                 {/* Content */}
                 <div className={styles.content}>
                     <div className={styles.contentInner}>
-                        {activePage === 'assistant' ? <AIAssistant /> : children}
+                        {activePage === 'assistant' ? (
+                            <AIAssistant initialQuestion={askAIQuestion} onQuestionConsumed={() => setAskAIQuestion(null)} />
+                        ) : (
+                            cloneElement(children, { onAskAI: handleAskAI })
+                        )}
                     </div>
                 </div>
             </main>

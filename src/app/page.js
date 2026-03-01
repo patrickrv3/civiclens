@@ -13,7 +13,7 @@ const CalendarIcon = () => (
   </svg>
 );
 
-export default function Home() {
+export default function Home({ onAskAI }) {
   const { profile } = useProfile();
   const [activeTab, setActiveTab] = useState('All');
   const [feedItems, setFeedItems] = useState([]);
@@ -228,7 +228,7 @@ export default function Home() {
         ) : filteredItems.length > 0 ? (
           <div className={styles.feedList}>
             {filteredItems.map(item => (
-              <FeedCard key={item.id} item={item} profile={profile} />
+              <FeedCard key={item.id} item={item} profile={profile} onAskAI={onAskAI} />
             ))}
           </div>
         ) : (
