@@ -1,0 +1,430 @@
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding-bottom: 40px;
+}
+
+.header {
+    padding: 24px 0 20px;
+    border-bottom: 1px solid var(--cl-gray-200);
+    margin-bottom: 28px;
+}
+
+.title {
+    font-size: var(--cl-font-xl);
+    font-weight: 700;
+    color: var(--cl-gray-900);
+    margin-bottom: 4px;
+}
+
+.subtitle {
+    font-size: var(--cl-font-sm);
+    color: var(--cl-gray-500);
+}
+
+/* ====== SECTION ====== */
+.section {
+    margin-bottom: 36px;
+}
+
+.sectionTitle {
+    font-size: var(--cl-font-md);
+    font-weight: 700;
+    color: var(--cl-gray-800);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sectionIcon {
+    width: 20px;
+    height: 20px;
+    color: var(--cl-primary-500);
+    flex-shrink: 0;
+}
+
+.sectionTitle svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+/* ====== ELECTION CARDS ====== */
+.electionList {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.electionCard {
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid var(--cl-gray-200);
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    transition: box-shadow 0.2s ease, transform 0.15s ease;
+    border-left: 4px solid var(--cl-gray-300);
+}
+
+.electionCard:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    transform: translateY(-1px);
+}
+
+.electionFederal {
+    border-left-color: #3b82f6;
+}
+
+.electionState {
+    border-left-color: #8b5cf6;
+}
+
+.electionLocal {
+    border-left-color: #10b981;
+}
+
+.electionIcon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.electionFederal .electionIcon {
+    background: #dbeafe;
+    color: #2563eb;
+}
+
+.electionState .electionIcon {
+    background: #ede9fe;
+    color: #7c3aed;
+}
+
+.electionLocal .electionIcon {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.electionIcon svg {
+    width: 24px;
+    height: 24px;
+}
+
+.electionInfo {
+    flex: 1;
+    min-width: 0;
+}
+
+.electionName {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--cl-gray-900);
+    margin-bottom: 2px;
+}
+
+.electionDate {
+    font-size: 0.82rem;
+    color: var(--cl-gray-500);
+}
+
+.electionCountdown {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.countdownSoon {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.countdownFar {
+    background: var(--cl-gray-100);
+    color: var(--cl-gray-600);
+}
+
+.levelBadge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-left: 8px;
+}
+
+.badgeFederal {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.badgeState {
+    background: #ede9fe;
+    color: #6d28d9;
+}
+
+.badgeLocal {
+    background: #d1fae5;
+    color: #047857;
+}
+
+/* ====== QUICK ACTIONS GRID ====== */
+.actionsGrid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+@media (max-width: 600px) {
+    .actionsGrid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.actionCard {
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid var(--cl-gray-200);
+    padding: 20px;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    color: inherit;
+}
+
+.actionCard:hover {
+    border-color: var(--cl-primary-300);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    transform: translateY(-2px);
+}
+
+.actionEmoji {
+    font-size: 1.6rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.actionContent {
+    flex: 1;
+}
+
+.actionTitle {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--cl-gray-900);
+    margin-bottom: 4px;
+}
+
+.actionDesc {
+    font-size: 0.78rem;
+    color: var(--cl-gray-500);
+    line-height: 1.4;
+}
+
+.actionArrow {
+    color: var(--cl-gray-400);
+    flex-shrink: 0;
+    align-self: center;
+}
+
+.actionArrow svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* ====== CHECKLIST ====== */
+.checklist {
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid var(--cl-gray-200);
+    overflow: hidden;
+}
+
+.checkItem {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--cl-gray-100);
+    cursor: pointer;
+    transition: background 0.15s ease;
+    user-select: none;
+}
+
+.checkItem:last-child {
+    border-bottom: none;
+}
+
+.checkItem:hover {
+    background: var(--cl-gray-50);
+}
+
+.checkbox {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 2px solid var(--cl-gray-300);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+}
+
+.checkbox svg {
+    width: 14px;
+    height: 14px;
+    opacity: 0;
+    transform: scale(0.5);
+    transition: all 0.2s ease;
+}
+
+.checkboxChecked {
+    background: var(--cl-primary-500);
+    border-color: var(--cl-primary-500);
+}
+
+.checkboxChecked svg {
+    opacity: 1;
+    transform: scale(1);
+    color: #fff;
+}
+
+.checkLabel {
+    font-size: 0.88rem;
+    color: var(--cl-gray-800);
+    transition: all 0.2s ease;
+}
+
+.checkLabelDone {
+    text-decoration: line-through;
+    color: var(--cl-gray-400);
+}
+
+.progressBar {
+    height: 4px;
+    background: var(--cl-gray-100);
+    margin: 0 20px 12px;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progressFill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--cl-primary-400), var(--cl-primary-600));
+    border-radius: 2px;
+    transition: width 0.4s ease;
+}
+
+.progressText {
+    font-size: 0.75rem;
+    color: var(--cl-gray-500);
+    text-align: center;
+    padding-bottom: 14px;
+}
+
+/* ====== IMPORTANT DATES TIMELINE ====== */
+.timeline {
+    position: relative;
+    padding-left: 28px;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 8px;
+    top: 4px;
+    bottom: 4px;
+    width: 2px;
+    background: var(--cl-gray-200);
+    border-radius: 1px;
+}
+
+.timelineItem {
+    position: relative;
+    padding-bottom: 20px;
+}
+
+.timelineItem:last-child {
+    padding-bottom: 0;
+}
+
+.timelineDot {
+    position: absolute;
+    left: -24px;
+    top: 4px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--cl-primary-400);
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 2px var(--cl-gray-200);
+}
+
+.timelineDotPast {
+    background: var(--cl-gray-300);
+}
+
+.timelineDate {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--cl-primary-600);
+    margin-bottom: 2px;
+}
+
+.timelineDatePast {
+    color: var(--cl-gray-400);
+}
+
+.timelineText {
+    font-size: 0.85rem;
+    color: var(--cl-gray-700);
+}
+
+.timelineTextPast {
+    color: var(--cl-gray-400);
+    text-decoration: line-through;
+}
+
+/* ====== LOADING ====== */
+.loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+}
+
+.spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid var(--cl-gray-200);
+    border-top-color: var(--cl-primary-500);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 12px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.loadingText {
+    font-size: var(--cl-font-sm);
+    color: var(--cl-gray-500);
+}
