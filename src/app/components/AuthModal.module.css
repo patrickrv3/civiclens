@@ -1,0 +1,244 @@
+.overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.modal {
+    background: #fff;
+    border-radius: 16px;
+    width: 420px;
+    max-width: 94vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.15);
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.97);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.header {
+    padding: 28px 28px 0;
+    text-align: center;
+}
+
+.logo {
+    font-size: 1.5rem;
+    font-weight: 800;
+    margin-bottom: 4px;
+}
+
+.logoAccent {
+    color: var(--cl-primary-500);
+}
+
+.headerSubtitle {
+    font-size: 0.82rem;
+    color: var(--cl-gray-500);
+}
+
+/* Tabs */
+.tabs {
+    display: flex;
+    margin: 20px 28px 0;
+    border-bottom: 2px solid var(--cl-gray-100);
+}
+
+.tab {
+    flex: 1;
+    padding: 10px 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--cl-gray-400);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tab:hover {
+    color: var(--cl-gray-600);
+}
+
+.tabActive {
+    color: var(--cl-primary-600);
+    border-bottom-color: var(--cl-primary-500);
+}
+
+/* Body */
+.body {
+    padding: 24px 28px 28px;
+}
+
+/* Google button */
+.googleBtn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 11px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--cl-gray-200);
+    background: #fff;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--cl-gray-700);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.googleBtn:hover {
+    border-color: var(--cl-gray-300);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.googleBtn svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* Divider */
+.divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 20px 0;
+    color: var(--cl-gray-400);
+    font-size: 0.75rem;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--cl-gray-200);
+}
+
+/* Form */
+.form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--cl-gray-600);
+}
+
+.input {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--cl-gray-200);
+    font-size: 0.88rem;
+    color: var(--cl-gray-900);
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.input:focus {
+    border-color: var(--cl-primary-400);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.submitBtn {
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: none;
+    background: var(--cl-primary-500);
+    color: #fff;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 4px;
+}
+
+.submitBtn:hover {
+    background: var(--cl-primary-600);
+}
+
+.submitBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Error */
+.error {
+    padding: 10px 14px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    color: #b91c1c;
+    font-size: 0.8rem;
+}
+
+/* Close button */
+.closeBtn {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: none;
+    background: var(--cl-gray-100);
+    color: var(--cl-gray-500);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.closeBtn:hover {
+    background: var(--cl-gray-200);
+    color: var(--cl-gray-700);
+}
+
+.closeBtn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.modalInner {
+    position: relative;
+}

@@ -7,6 +7,8 @@ import OnboardingModal from './OnboardingModal';
 import AIAssistant from './AIAssistant';
 import Representatives from './Representatives';
 import Elections from './Elections';
+import AuthModal from './AuthModal';
+import { useAuth } from '../context/AuthContext';
 
 // Context to share the askAI callback with any descendant
 const AskAIContext = createContext(null);
@@ -86,9 +88,11 @@ const secondaryNavItems = [
 
 export default function AppShell({ children }) {
     const { profile, getPrimaryLocation } = useProfile();
+    const { user, logOut } = useAuth();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [activePage, setActivePage] = useState('feed');
     const [modalOpen, setModalOpen] = useState(false);
+    const [showAuthModal, setShowAuthModal] = useState(false);
     const [askAIQuestion, setAskAIQuestion] = useState(null);
 
     const handleNavClick = (id) => {
@@ -157,13 +161,47 @@ export default function AppShell({ children }) {
                     </nav>
 
                     <div className={styles.sidebarFooter}>
-                        <div className={styles.userCard} onClick={() => setModalOpen(true)}>
-                            <div className={styles.userAvatar}>CL</div>
-                            <div>
-                                <div className={styles.userName}>{profileName}</div>
-                                <div className={styles.userLocation}>{locationText}</div>
+                        {user ? (
+                            <div className={styles.userCard}>
+                                <div className={styles.userAvatar} onClick={() => setModalOpen(true)}>
+                                    {user.displayName ? user.displayName[0].toUpperCase() : user.email[0].toUpperCase()}
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }} onClick={() => setModalOpen(true)}>
+                                    <div className={styles.userName}>{user.displayName || user.email.split('@')[0]}</div>
+                                    <div className={styles.userLocation}>{locationText}</div>
+                                </div>
+                                <button
+                                    onClick={logOut}
+                                    title="Sign Out"
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--cl-gray-400)', padding: '4px', borderRadius: '6px' }}
+                                >
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
+                                    </svg>
+                                </button>
                             </div>
-                        </div>
+                        ) : (
+                            <>
+                                <div className={styles.userCard} onClick={() => setModalOpen(true)}>
+                                    <div className={styles.userAvatar}>CL</div>
+                                    <div>
+                                        <div className={styles.userName}>{profileName}</div>
+                                        <div className={styles.userLocation}>{locationText}</div>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setShowAuthModal(true)}
+                                    style={{
+                                        width: '100%', marginTop: '8px', padding: '9px 16px', borderRadius: '10px',
+                                        border: '1px solid var(--cl-primary-300)', background: 'var(--cl-primary-50)',
+                                        color: 'var(--cl-primary-600)', fontSize: '0.82rem', fontWeight: 600,
+                                        cursor: 'pointer', transition: 'all 0.2s'
+                                    }}
+                                >
+                                    Sign In / Sign Up
+                                </button>
+                            </>
+                        )}
                     </div>
                 </aside>
 
@@ -225,6 +263,7 @@ export default function AppShell({ children }) {
                 </main>
 
                 <OnboardingModal isOpen={modalOpen} onClose={() => setModalOpen(false)} />
+                {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
             </div>
         </AskAIContext.Provider>
     );

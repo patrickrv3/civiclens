@@ -1,4 +1,5 @@
 import './globals.css';
+import { AuthProvider } from './context/AuthContext';
 import { ProfileProvider } from './context/ProfileContext';
 
 export const metadata = {
@@ -11,10 +12,13 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body>
-        <ProfileProvider>
-          {children}
-        </ProfileProvider>
+        <AuthProvider>
+          <ProfileProvider>
+            {children}
+          </ProfileProvider>
+        </AuthProvider>
       </body>
     </html>
   );
 }
+
