@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import styles from './FeedCard.module.css';
+import { useAskAI } from './AppShell';
 
 // SVG Icons
 const AlertCircleIcon = () => (
@@ -42,7 +43,8 @@ const ThumbsDownIcon = () => (
     </svg>
 );
 
-export default function FeedCard({ item, profile, onAskAI }) {
+export default function FeedCard({ item, profile }) {
+    const onAskAI = useAskAI();
     const [reaction, setReaction] = useState(null); // 'like', 'dislike', or null
 
     const handleReaction = (type) => {

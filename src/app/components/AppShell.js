@@ -1,10 +1,14 @@
 'use client';
 
-import { useState, cloneElement } from 'react';
+import { useState, createContext, useContext } from 'react';
 import styles from '../layout.module.css';
 import { useProfile } from '../context/ProfileContext';
 import OnboardingModal from './OnboardingModal';
 import AIAssistant from './AIAssistant';
+
+// Context to share the askAI callback with any descendant
+const AskAIContext = createContext(null);
+export function useAskAI() { return useContext(AskAIContext); }
 
 /* --- Simple SVG Icons (inline, no external deps needed) --- */
 const Icons = {
@@ -99,117 +103,116 @@ export default function AppShell({ children }) {
     const profileName = profile.hasCompletedOnboarding ? 'Your Profile' : 'Set up profile';
 
     return (
-        <div className={styles.shell}>
-            {/* Sidebar */}
-            <aside className={`${styles.sidebar} ${sidebarOpen ? styles.open : ''}`}>
-                <div className={styles.sidebarHeader}>
-                    <div className={styles.logoMark}>
-                        {Icons.logo}
-                    </div>
-                    <div className={styles.logoText}>
-                        Civic<span>Lens</span>
-                    </div>
-                </div>
-
-                <nav className={styles.nav}>
-                    <div className={styles.navSection}>
-                        <div className={styles.navSectionLabel}>Main</div>
-                        {navItems.map((item) => (
-                            <button
-                                key={item.id}
-                                className={`${styles.navItem} ${activePage === item.id ? styles.active : ''}`}
-                                onClick={() => handleNavClick(item.id)}
-                            >
-                                <span className={styles.navIcon}>{item.icon}</span>
-                                {item.label}
-                                {item.badge && <span className={styles.navBadge}>{item.badge}</span>}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className={styles.navSection}>
-                        <div className={styles.navSectionLabel}>General</div>
-                        {secondaryNavItems.map((item) => (
-                            <button
-                                key={item.id}
-                                className={`${styles.navItem} ${activePage === item.id ? styles.active : ''}`}
-                                onClick={() => handleNavClick(item.id)}
-                            >
-                                <span className={styles.navIcon}>{item.icon}</span>
-                                {item.label}
-                            </button>
-                        ))}
-                    </div>
-                </nav>
-
-                <div className={styles.sidebarFooter}>
-                    <div className={styles.userCard} onClick={() => setModalOpen(true)}>
-                        <div className={styles.userAvatar}>CL</div>
-                        <div>
-                            <div className={styles.userName}>{profileName}</div>
-                            <div className={styles.userLocation}>{locationText}</div>
+        <AskAIContext.Provider value={handleAskAI}>
+            <div className={styles.shell}>
+                {/* Sidebar */}
+                <aside className={`${styles.sidebar} ${sidebarOpen ? styles.open : ''}`}>
+                    <div className={styles.sidebarHeader}>
+                        <div className={styles.logoMark}>
+                            {Icons.logo}
+                        </div>
+                        <div className={styles.logoText}>
+                            Civic<span>Lens</span>
                         </div>
                     </div>
-                </div>
-            </aside>
 
+                    <nav className={styles.nav}>
+                        <div className={styles.navSection}>
+                            <div className={styles.navSectionLabel}>Main</div>
+                            {navItems.map((item) => (
+                                <button
+                                    key={item.id}
+                                    className={`${styles.navItem} ${activePage === item.id ? styles.active : ''}`}
+                                    onClick={() => handleNavClick(item.id)}
+                                >
+                                    <span className={styles.navIcon}>{item.icon}</span>
+                                    {item.label}
+                                    {item.badge && <span className={styles.navBadge}>{item.badge}</span>}
+                                </button>
+                            ))}
+                        </div>
 
-            {/* Mobile overlay */}
-            <div
-                className={`${styles.overlay} ${sidebarOpen ? styles.visible : ''}`}
-                onClick={() => setSidebarOpen(false)}
-            />
+                        <div className={styles.navSection}>
+                            <div className={styles.navSectionLabel}>General</div>
+                            {secondaryNavItems.map((item) => (
+                                <button
+                                    key={item.id}
+                                    className={`${styles.navItem} ${activePage === item.id ? styles.active : ''}`}
+                                    onClick={() => handleNavClick(item.id)}
+                                >
+                                    <span className={styles.navIcon}>{item.icon}</span>
+                                    {item.label}
+                                </button>
+                            ))}
+                        </div>
+                    </nav>
 
-            {/* Main area */}
-            <main className={styles.mainArea}>
-                {/* Top bar */}
-                <header className={styles.topBar}>
-                    <div className={styles.topBarLeft}>
-                        <button
-                            className={styles.menuButton}
-                            onClick={() => setSidebarOpen(!sidebarOpen)}
-                            aria-label="Toggle menu"
-                        >
-                            {Icons.menu}
-                        </button>
-                        <h1 className={styles.pageTitle}>
-                            {navItems.find(i => i.id === activePage)?.label ||
-                                secondaryNavItems.find(i => i.id === activePage)?.label ||
-                                'CivicLens'}
-                        </h1>
+                    <div className={styles.sidebarFooter}>
+                        <div className={styles.userCard} onClick={() => setModalOpen(true)}>
+                            <div className={styles.userAvatar}>CL</div>
+                            <div>
+                                <div className={styles.userName}>{profileName}</div>
+                                <div className={styles.userLocation}>{locationText}</div>
+                            </div>
+                        </div>
                     </div>
+                </aside>
 
-                    <div className={styles.searchBar}>
-                        <span className={styles.searchIcon}>{Icons.search}</span>
-                        <input
-                            type="text"
-                            className={styles.searchInput}
-                            placeholder="Search laws, bills, reps..."
-                        />
-                        <span className={styles.searchShortcut}>⌘K</span>
+                {/* Mobile overlay */}
+                <div
+                    className={`${styles.overlay} ${sidebarOpen ? styles.visible : ''}`}
+                    onClick={() => setSidebarOpen(false)}
+                />
+
+                {/* Main area */}
+                <main className={styles.mainArea}>
+                    {/* Top bar */}
+                    <header className={styles.topBar}>
+                        <div className={styles.topBarLeft}>
+                            <button
+                                className={styles.menuButton}
+                                onClick={() => setSidebarOpen(!sidebarOpen)}
+                                aria-label="Toggle menu"
+                            >
+                                {Icons.menu}
+                            </button>
+                            <h1 className={styles.pageTitle}>
+                                {navItems.find(i => i.id === activePage)?.label ||
+                                    secondaryNavItems.find(i => i.id === activePage)?.label ||
+                                    'CivicLens'}
+                            </h1>
+                        </div>
+
+                        <div className={styles.searchBar}>
+                            <span className={styles.searchIcon}>{Icons.search}</span>
+                            <input
+                                type="text"
+                                className={styles.searchInput}
+                                placeholder="Search laws, bills, reps..."
+                            />
+                            <span className={styles.searchShortcut}>⌘K</span>
+                        </div>
+
+                        <div className={styles.topBarRight}>
+                            <button className={styles.topBarAction} aria-label="Notifications">
+                                {Icons.bell}
+                                <span className={styles.notifDot} />
+                            </button>
+                        </div>
+                    </header>
+
+                    {/* Content */}
+                    <div className={styles.content}>
+                        <div className={styles.contentInner}>
+                            {activePage === 'assistant' ? (
+                                <AIAssistant initialQuestion={askAIQuestion} onQuestionConsumed={() => setAskAIQuestion(null)} />
+                            ) : children}
+                        </div>
                     </div>
+                </main>
 
-                    <div className={styles.topBarRight}>
-                        <button className={styles.topBarAction} aria-label="Notifications">
-                            {Icons.bell}
-                            <span className={styles.notifDot} />
-                        </button>
-                    </div>
-                </header>
-
-                {/* Content */}
-                <div className={styles.content}>
-                    <div className={styles.contentInner}>
-                        {activePage === 'assistant' ? (
-                            <AIAssistant initialQuestion={askAIQuestion} onQuestionConsumed={() => setAskAIQuestion(null)} />
-                        ) : (
-                            cloneElement(children, { onAskAI: handleAskAI })
-                        )}
-                    </div>
-                </div>
-            </main>
-
-            <OnboardingModal isOpen={modalOpen} onClose={() => setModalOpen(false)} />
-        </div>
+                <OnboardingModal isOpen={modalOpen} onClose={() => setModalOpen(false)} />
+            </div>
+        </AskAIContext.Provider>
     );
 }
