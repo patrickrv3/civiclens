@@ -7,6 +7,7 @@ import OnboardingModal from './OnboardingModal';
 import AIAssistant from './AIAssistant';
 import Representatives from './Representatives';
 import Elections from './Elections';
+import Settings from './Settings';
 import AuthModal from './AuthModal';
 import { useAuth } from '../context/AuthContext';
 
@@ -107,9 +108,14 @@ export default function AppShell({ children }) {
 
     // Listen for custom navigation events (e.g., from Elections quick actions)
     useEffect(() => {
-        const handler = (e) => setActivePage(e.detail);
-        window.addEventListener('civiclens:navigate', handler);
-        return () => window.removeEventListener('civiclens:navigate', handler);
+        const navHandler = (e) => setActivePage(e.detail);
+        const authHandler = () => setShowAuthModal(true);
+        window.addEventListener('civiclens:navigate', navHandler);
+        window.addEventListener('civiclens:openAuth', authHandler);
+        return () => {
+            window.removeEventListener('civiclens:navigate', navHandler);
+            window.removeEventListener('civiclens:openAuth', authHandler);
+        };
     }, []);
 
     const locationText = getPrimaryLocation() || 'Add your location →';
@@ -257,6 +263,8 @@ export default function AppShell({ children }) {
                                 <Representatives />
                             ) : activePage === 'elections' ? (
                                 <Elections />
+                            ) : activePage === 'settings' ? (
+                                <Settings />
                             ) : children}
                         </div>
                     </div>

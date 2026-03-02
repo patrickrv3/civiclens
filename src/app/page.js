@@ -17,13 +17,17 @@ export default function Home() {
   const { profile } = useProfile();
   const [activeTab, setActiveTab] = useState('All');
   const [feedItems, setFeedItems] = useState([]);
+  const [stateFeedItems, setStateFeedItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingState, setIsLoadingState] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isPersonalizing, setIsPersonalizing] = useState(false);
   const [error, setError] = useState(null);
   const [hasMore, setHasMore] = useState(false);
   const [nextOffset, setNextOffset] = useState(0);
+  const [stateInfo, setStateInfo] = useState(null);
   const hasLoadedOnce = useRef(false);
+  const hasLoadedState = useRef(false);
   const sentinelRef = useRef(null);
   const isLoadingMoreRef = useRef(false);
 
@@ -140,15 +144,48 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.lifeTags]);
 
+  // Fetch state bills when "State & Local" tab is clicked (lazy load)
+  useEffect(() => {
+    if (activeTab !== 'State & Local') return;
+    if (hasLoadedState.current) return;
+    if (!profile?.location?.zipCode) return;
+
+    async function fetchStateFeed() {
+      setIsLoadingState(true);
+      try {
+        const response = await fetch('/api/state-feed', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ zipCode: profile.location.zipCode, page: 1, perPage: 15 }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch state feed');
+        setStateFeedItems(data.items || []);
+        setStateInfo({ state: data.state, stateName: data.stateName });
+        hasLoadedState.current = true;
+      } catch (err) {
+        console.warn('State feed error:', err);
+      } finally {
+        setIsLoadingState(false);
+      }
+    }
+    fetchStateFeed();
+  }, [activeTab, profile?.location?.zipCode]);
+
   const impactOrder = { 'High Impact': 0, 'Moderate Impact': 1, 'Low Impact': 2 };
 
-  const filteredItems = feedItems
-    .filter(item => {
-      if (activeTab === 'Federal' && item.level !== 'Federal') return false;
-      if (activeTab === 'State & Local' && item.level !== 'State' && item.level !== 'Local') return false;
-      return true;
-    })
-    .sort((a, b) => (impactOrder[a.impactLevel] ?? 3) - (impactOrder[b.impactLevel] ?? 3));
+  const filteredItems = (() => {
+    let items;
+    if (activeTab === 'Federal') {
+      items = feedItems.filter(item => item.level === 'Federal');
+    } else if (activeTab === 'State & Local') {
+      items = stateFeedItems;
+    } else {
+      // "All Updates" — merge federal + state
+      items = [...feedItems, ...stateFeedItems];
+    }
+    return items.sort((a, b) => (impactOrder[a.impactLevel] ?? 3) - (impactOrder[b.impactLevel] ?? 3));
+  })();
 
   return (
     <AppShell>
@@ -203,27 +240,27 @@ export default function Home() {
         {isLoading ? (
           <div style={{ textAlign: 'center', padding: '40px 0', color: '#666' }}>
             <div style={{
-              display: 'inline-block',
-              width: '40px',
-              height: '40px',
-              border: '4px solid #f3f3f3',
-              borderTop: '4px solid var(--cl-primary-500)',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
-              marginBottom: '16px'
+              display: 'inline-block', width: '40px', height: '40px',
+              border: '4px solid #f3f3f3', borderTop: '4px solid var(--cl-primary-500)',
+              borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '16px'
             }}></div>
-            <style>{`
-              @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-              }
-            `}</style>
+            <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
             <p>Fetching the latest legislation from Congress and generating AI summaries...</p>
             <p style={{ fontSize: '0.85em', color: '#999', marginTop: '8px' }}>This takes a few seconds.</p>
           </div>
+        ) : (activeTab === 'State & Local' && isLoadingState) ? (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: '#666' }}>
+            <div style={{
+              display: 'inline-block', width: '40px', height: '40px',
+              border: '4px solid #f3f3f3', borderTop: '4px solid #8b5cf6',
+              borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '16px'
+            }}></div>
+            <p>Fetching state legislation{stateInfo ? ` from ${stateInfo.stateName}` : ''}...</p>
+            <p style={{ fontSize: '0.85em', color: '#999', marginTop: '8px' }}>Powered by OpenStates</p>
+          </div>
         ) : error ? (
           <div style={{ padding: '24px', background: '#fee2e2', color: '#b91c1c', borderRadius: '8px', border: '1px solid #f87171' }}>
-            <strong>Error leading feed:</strong> {error}
+            <strong>Error loading feed:</strong> {error}
           </div>
         ) : filteredItems.length > 0 ? (
           <div className={styles.feedList}>
@@ -234,7 +271,9 @@ export default function Home() {
         ) : (
           <div style={{ textAlign: 'center', padding: '40px 0', color: '#666' }}>
             <p>No civic updates found for this filter.</p>
-            {hasMore && <p style={{ fontSize: '0.85em', color: '#999', marginTop: '8px' }}>Loading more to find matches...</p>}
+            {activeTab === 'State & Local' && !profile?.location?.zipCode && (
+              <p style={{ fontSize: '0.85em', color: '#999', marginTop: '8px' }}>Add your zip code in Settings to see state legislation.</p>
+            )}
           </div>
         )}
 

@@ -1,0 +1,288 @@
+.container {
+    max-width: 700px;
+    margin: 0 auto;
+    padding-bottom: 40px;
+}
+
+.header {
+    padding: 24px 0 20px;
+    border-bottom: 1px solid var(--cl-gray-200);
+    margin-bottom: 28px;
+}
+
+.title {
+    font-size: var(--cl-font-xl);
+    font-weight: 700;
+    color: var(--cl-gray-900);
+    margin-bottom: 4px;
+}
+
+.subtitle {
+    font-size: var(--cl-font-sm);
+    color: var(--cl-gray-500);
+}
+
+/* ====== SECTIONS ====== */
+.section {
+    margin-bottom: 28px;
+}
+
+.sectionTitle {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--cl-gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+}
+
+.card {
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid var(--cl-gray-200);
+    padding: 20px;
+}
+
+/* ====== ZIP INPUT ====== */
+.fieldRow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.fieldLabel {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--cl-gray-800);
+    min-width: 100px;
+}
+
+.input {
+    flex: 1;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--cl-gray-200);
+    font-size: 0.88rem;
+    color: var(--cl-gray-900);
+    outline: none;
+    transition: border-color 0.2s;
+    max-width: 180px;
+}
+
+.input:focus {
+    border-color: var(--cl-primary-400);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.savedBadge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #059669;
+    background: #d1fae5;
+    padding: 2px 8px;
+    border-radius: 999px;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ====== TAG GRID ====== */
+.tagGrid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.tag {
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: 1px solid var(--cl-gray-200);
+    background: #fff;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--cl-gray-600);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.tag:hover {
+    border-color: var(--cl-primary-300);
+    color: var(--cl-primary-600);
+}
+
+.tagActive {
+    background: var(--cl-primary-50);
+    border-color: var(--cl-primary-400);
+    color: var(--cl-primary-700);
+    font-weight: 600;
+}
+
+/* ====== TOGGLE ====== */
+.toggleRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.toggleInfo {
+    flex: 1;
+}
+
+.toggleLabel {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--cl-gray-800);
+}
+
+.toggleDesc {
+    font-size: 0.78rem;
+    color: var(--cl-gray-500);
+    margin-top: 2px;
+}
+
+.toggle {
+    width: 44px;
+    height: 24px;
+    border-radius: 12px;
+    border: none;
+    background: var(--cl-gray-200);
+    cursor: pointer;
+    position: relative;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+    transition: transform 0.2s;
+}
+
+.toggleOn {
+    background: var(--cl-primary-500);
+}
+
+.toggleOn::after {
+    transform: translateX(20px);
+}
+
+/* ====== ACCOUNT SECTION ====== */
+.accountInfo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 16px;
+}
+
+.accountAvatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: var(--cl-primary-100);
+    color: var(--cl-primary-600);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.accountEmail {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--cl-gray-800);
+}
+
+.accountLabel {
+    font-size: 0.75rem;
+    color: var(--cl-gray-500);
+}
+
+.signOutBtn {
+    width: 100%;
+    padding: 10px 16px;
+    border-radius: 10px;
+    border: 1px solid #fecaca;
+    background: #fef2f2;
+    color: #b91c1c;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.signOutBtn:hover {
+    background: #fee2e2;
+    border-color: #fca5a5;
+}
+
+.signInPrompt {
+    text-align: center;
+    padding: 16px;
+    color: var(--cl-gray-500);
+    font-size: 0.85rem;
+}
+
+.signInBtn {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 9px 24px;
+    border-radius: 10px;
+    border: 1px solid var(--cl-primary-300);
+    background: var(--cl-primary-50);
+    color: var(--cl-primary-600);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.signInBtn:hover {
+    background: var(--cl-primary-100);
+}
+
+/* ====== DANGER ZONE ====== */
+.dangerCard {
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid #fecaca;
+    padding: 20px;
+}
+
+.resetBtn {
+    padding: 8px 20px;
+    border-radius: 8px;
+    border: 1px solid var(--cl-gray-200);
+    background: #fff;
+    color: var(--cl-gray-600);
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 12px;
+}
+
+.resetBtn:hover {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #b91c1c;
+}
