@@ -1,0 +1,153 @@
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding-bottom: 40px;
+}
+
+.header {
+    padding: 24px 0 20px;
+    border-bottom: 1px solid var(--cl-gray-200);
+    margin-bottom: 24px;
+}
+
+.title {
+    font-size: var(--cl-font-xl);
+    font-weight: 700;
+    color: var(--cl-gray-900);
+    margin-bottom: 4px;
+}
+
+.subtitle {
+    font-size: var(--cl-font-sm);
+    color: var(--cl-gray-500);
+}
+
+.stateBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    padding: 6px 14px;
+    background: var(--cl-primary-50);
+    color: var(--cl-primary-700);
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.stateBadge svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Sections */
+.section {
+    margin-bottom: 32px;
+}
+
+.sectionTitle {
+    font-size: var(--cl-font-md);
+    font-weight: 700;
+    color: var(--cl-gray-800);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sectionCount {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--cl-gray-100);
+    color: var(--cl-gray-500);
+}
+
+.cardList {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Loading state */
+.loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 20px;
+    text-align: center;
+}
+
+.spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--cl-gray-200);
+    border-top-color: var(--cl-primary-500);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 16px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.loadingText {
+    font-size: var(--cl-font-sm);
+    color: var(--cl-gray-500);
+}
+
+/* Empty / error states */
+.emptyState {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 20px;
+    text-align: center;
+}
+
+.emptyIcon {
+    width: 56px;
+    height: 56px;
+    background: var(--cl-gray-100);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+    color: var(--cl-gray-400);
+}
+
+.emptyIcon svg {
+    width: 28px;
+    height: 28px;
+}
+
+.emptyTitle {
+    font-size: var(--cl-font-lg);
+    font-weight: 600;
+    color: var(--cl-gray-900);
+    margin-bottom: 8px;
+}
+
+.emptyText {
+    font-size: var(--cl-font-sm);
+    color: var(--cl-gray-500);
+    max-width: 400px;
+    line-height: 1.6;
+}
+
+.error {
+    padding: 16px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 10px;
+    color: #b91c1c;
+    font-size: 0.85rem;
+    text-align: center;
+}

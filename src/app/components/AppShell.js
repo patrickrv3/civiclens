@@ -5,6 +5,7 @@ import styles from '../layout.module.css';
 import { useProfile } from '../context/ProfileContext';
 import OnboardingModal from './OnboardingModal';
 import AIAssistant from './AIAssistant';
+import Representatives from './Representatives';
 
 // Context to share the askAI callback with any descendant
 const AskAIContext = createContext(null);
@@ -206,6 +207,8 @@ export default function AppShell({ children }) {
                         <div className={styles.contentInner}>
                             {activePage === 'assistant' ? (
                                 <AIAssistant initialQuestion={askAIQuestion} onQuestionConsumed={() => setAskAIQuestion(null)} />
+                            ) : activePage === 'reps' ? (
+                                <Representatives />
                             ) : children}
                         </div>
                     </div>
