@@ -19,7 +19,7 @@ const CloseIcon = () => (
     </svg>
 );
 
-export default function AuthModal({ onClose }) {
+export default function AuthModal({ onClose, onSignUp }) {
     const { signUp, signIn, signInWithGoogle } = useAuth();
     const [mode, setMode] = useState('signin'); // 'signin' | 'signup'
     const [email, setEmail] = useState('');
@@ -35,10 +35,12 @@ export default function AuthModal({ onClose }) {
         try {
             if (mode === 'signup') {
                 await signUp(email, password);
+                onClose();
+                if (onSignUp) onSignUp();
             } else {
                 await signIn(email, password);
+                onClose();
             }
-            onClose();
         } catch (err) {
             const code = err.code || '';
             if (code === 'auth/email-already-in-use') {
@@ -62,6 +64,7 @@ export default function AuthModal({ onClose }) {
         try {
             await signInWithGoogle();
             onClose();
+            if (onSignUp) onSignUp();
         } catch (err) {
             if (err.code !== 'auth/popup-closed-by-user') {
                 setError('Google sign-in failed. Please try again.');

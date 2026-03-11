@@ -168,16 +168,16 @@ export default function AppShell({ children }) {
 
                     <div className={styles.sidebarFooter}>
                         {user ? (
-                            <div className={styles.userCard}>
-                                <div className={styles.userAvatar} onClick={() => setModalOpen(true)}>
+                            <div className={styles.userCard} onClick={() => { if (profile.hasCompletedOnboarding) { setActivePage('settings'); } else { setModalOpen(true); } }}>
+                                <div className={styles.userAvatar}>
                                     {user.displayName ? user.displayName[0].toUpperCase() : user.email[0].toUpperCase()}
                                 </div>
-                                <div style={{ flex: 1, minWidth: 0 }} onClick={() => setModalOpen(true)}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
                                     <div className={styles.userName}>{user.displayName || user.email.split('@')[0]}</div>
                                     <div className={styles.userLocation}>{locationText}</div>
                                 </div>
                                 <button
-                                    onClick={logOut}
+                                    onClick={(e) => { e.stopPropagation(); logOut(); }}
                                     title="Sign Out"
                                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--cl-gray-400)', padding: '4px', borderRadius: '6px' }}
                                 >
@@ -188,11 +188,11 @@ export default function AppShell({ children }) {
                             </div>
                         ) : (
                             <>
-                                <div className={styles.userCard} onClick={() => setModalOpen(true)}>
+                                <div className={styles.userCard}>
                                     <div className={styles.userAvatar}>CL</div>
                                     <div>
-                                        <div className={styles.userName}>{profileName}</div>
-                                        <div className={styles.userLocation}>{locationText}</div>
+                                        <div className={styles.userName}>Guest</div>
+                                        <div className={styles.userLocation}>Sign in to save your data</div>
                                     </div>
                                 </div>
                                 <button
@@ -271,7 +271,16 @@ export default function AppShell({ children }) {
                 </main>
 
                 <OnboardingModal isOpen={modalOpen} onClose={() => setModalOpen(false)} />
-                {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
+                {showAuthModal && (
+                    <AuthModal
+                        onClose={() => setShowAuthModal(false)}
+                        onSignUp={() => {
+                            if (!profile.hasCompletedOnboarding) {
+                                setTimeout(() => setModalOpen(true), 300);
+                            }
+                        }}
+                    />
+                )}
             </div>
         </AskAIContext.Provider>
     );
