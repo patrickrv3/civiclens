@@ -18,6 +18,7 @@ export default function Home() {
   const { profile } = useProfile();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('All');
+  const [sortBy, setSortBy] = useState('impact'); // 'impact' | 'recent'
   const [feedItems, setFeedItems] = useState([]);
   const [stateFeedItems, setStateFeedItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -183,8 +184,10 @@ export default function Home() {
     } else if (activeTab === 'State & Local') {
       items = stateFeedItems;
     } else {
-      // "All Updates" — merge federal + state
       items = [...feedItems, ...stateFeedItems];
+    }
+    if (sortBy === 'recent') {
+      return items.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
     }
     return items.sort((a, b) => (impactOrder[a.impactLevel] ?? 3) - (impactOrder[b.impactLevel] ?? 3));
   })();
@@ -217,25 +220,45 @@ export default function Home() {
             )}
           </div>
 
-          <div className={styles.feedTabs}>
-            <button
-              className={`${styles.tabBtn} ${activeTab === 'All' ? styles.tabActive : ''}`}
-              onClick={() => setActiveTab('All')}
-            >
-              All Updates
-            </button>
-            <button
-              className={`${styles.tabBtn} ${activeTab === 'Federal' ? styles.tabActive : ''}`}
-              onClick={() => setActiveTab('Federal')}
-            >
-              Federal
-            </button>
-            <button
-              className={`${styles.tabBtn} ${activeTab === 'State & Local' ? styles.tabActive : ''}`}
-              onClick={() => setActiveTab('State & Local')}
-            >
-              State & Local
-            </button>
+          <div className={styles.feedControls}>
+            <div className={styles.feedTabs}>
+              <button
+                className={`${styles.tabBtn} ${activeTab === 'All' ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab('All')}
+              >
+                All Updates
+              </button>
+              <button
+                className={`${styles.tabBtn} ${activeTab === 'Federal' ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab('Federal')}
+              >
+                Federal
+              </button>
+              <button
+                className={`${styles.tabBtn} ${activeTab === 'State & Local' ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab('State & Local')}
+              >
+                State &amp; Local
+              </button>
+            </div>
+
+            <div className={styles.sortControl}>
+              <span className={styles.sortLabel}>Sort:</span>
+              <button
+                className={`${styles.sortBtn} ${sortBy === 'impact' ? styles.sortBtnActive : ''}`}
+                onClick={() => setSortBy('impact')}
+                title="Sort by impact level"
+              >
+                ⚡ High Impact
+              </button>
+              <button
+                className={`${styles.sortBtn} ${sortBy === 'recent' ? styles.sortBtnActive : ''}`}
+                onClick={() => setSortBy('recent')}
+                title="Sort by most recent"
+              >
+                🕐 Most Recent
+              </button>
+            </div>
           </div>
         </header>
 

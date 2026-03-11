@@ -189,6 +189,55 @@
   box-shadow: var(--cl-shadow-sm);
 }
 
+/* Sort controls */
+.feedControls {
+  display: flex;
+  align-items: center;
+  gap: var(--cl-space-3);
+  flex-wrap: wrap;
+}
+
+.sortControl {
+  display: flex;
+  align-items: center;
+  gap: var(--cl-space-1);
+}
+
+.sortLabel {
+  font-size: var(--cl-font-xs);
+  font-weight: 600;
+  color: var(--cl-gray-400);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-right: 4px;
+}
+
+.sortBtn {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--cl-gray-500);
+  background: transparent;
+  border: 1px solid var(--cl-gray-200);
+  padding: 5px 12px;
+  border-radius: var(--cl-radius-full);
+  cursor: pointer;
+  transition: all var(--cl-transition-fast);
+  white-space: nowrap;
+}
+
+.sortBtn:hover {
+  border-color: var(--cl-primary-300);
+  color: var(--cl-primary-600);
+  background: var(--cl-primary-50);
+}
+
+.sortBtnActive {
+  background: var(--cl-primary-50);
+  border-color: var(--cl-primary-400);
+  color: var(--cl-primary-700);
+  font-weight: 600;
+}
+
 .actionsGrid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
