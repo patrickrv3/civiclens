@@ -45,7 +45,8 @@ const ThumbsDownIcon = () => (
 
 export default function FeedCard({ item, profile }) {
     const onAskAI = useAskAI();
-    const [reaction, setReaction] = useState(null); // 'like', 'dislike', or null
+    const [reaction, setReaction] = useState(null);
+    const [expanded, setExpanded] = useState(false);
 
     const handleReaction = (type) => {
         if (reaction === type) {
@@ -139,7 +140,35 @@ export default function FeedCard({ item, profile }) {
                     AI Summary
                 </div>
                 <p className={styles.aiText}>
-                    {item.generalSummary}
+                    {(() => {
+                        const summary = item.generalSummary || '';
+                        const fullText = item.fullSummary || summary;
+                        const LIMIT = 280;
+                        const isTruncatable = fullText.length > LIMIT;
+                        const displayText = isTruncatable && !expanded
+                            ? summary.slice(0, LIMIT).trimEnd() + '...'
+                            : fullText;
+                        return (
+                            <>
+                                {displayText}
+                                {isTruncatable && (
+                                    <>
+                                        {' '}
+                                        <button
+                                            onClick={() => setExpanded(e => !e)}
+                                            style={{
+                                                background: 'none', border: 'none',
+                                                color: 'var(--cl-primary-600)', cursor: 'pointer',
+                                                fontSize: 'inherit', fontWeight: 600, padding: 0,
+                                            }}
+                                        >
+                                            {expanded ? 'See less' : 'See more'}
+                                        </button>
+                                    </>
+                                )}
+                            </>
+                        );
+                    })()}
 
                     {personalizedImpact && (
                         <>

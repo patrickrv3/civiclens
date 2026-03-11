@@ -317,6 +317,7 @@ export async function POST(request) {
                 stateName: stateName,
                 date: bill.latest_action_date || bill.first_action_date || '',
                 generalSummary: condenseSummary(abstract) || `${bill.title} — a ${stateName} state bill currently in the legislature.`,
+                fullSummary: abstract || '',
                 impactLevel: classifyImpact(bill),
                 status: mapStatus(bill.latest_action_description),
                 latestAction: bill.latest_action_description || '',
