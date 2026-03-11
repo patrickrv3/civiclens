@@ -9,7 +9,9 @@ import Representatives from './Representatives';
 import Elections from './Elections';
 import Settings from './Settings';
 import AuthModal from './AuthModal';
+import NotificationPanel from './NotificationPanel';
 import { useAuth } from '../context/AuthContext';
+import { useWatchedBills } from '../context/WatchedBillsContext';
 
 // Context to share the askAI callback with any descendant
 const AskAIContext = createContext(null);
@@ -90,10 +92,12 @@ const secondaryNavItems = [
 export default function AppShell({ children }) {
     const { profile, getPrimaryLocation } = useProfile();
     const { user, logOut } = useAuth();
+    const { unreadCount } = useWatchedBills();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [activePage, setActivePage] = useState('feed');
     const [modalOpen, setModalOpen] = useState(false);
     const [showAuthModal, setShowAuthModal] = useState(false);
+    const [showNotifPanel, setShowNotifPanel] = useState(false);
     const [askAIQuestion, setAskAIQuestion] = useState(null);
 
     const handleNavClick = (id) => {
@@ -246,11 +250,26 @@ export default function AppShell({ children }) {
                             <span className={styles.searchShortcut}>⌘K</span>
                         </div>
 
-                        <div className={styles.topBarRight}>
-                            <button className={styles.topBarAction} aria-label="Notifications">
+                        <div className={styles.topBarRight} style={{ position: 'relative' }}>
+                            <button
+                                className={styles.topBarAction}
+                                aria-label="Notifications"
+                                onClick={() => setShowNotifPanel(p => !p)}
+                                style={{ position: 'relative' }}
+                            >
                                 {Icons.bell}
-                                <span className={styles.notifDot} />
+                                {unreadCount > 0 && (
+                                    <span className={styles.notifDot} style={{
+                                        background: 'var(--cl-danger-500)',
+                                        position: 'absolute', top: 6, right: 6,
+                                        width: 8, height: 8, borderRadius: '50%',
+                                        border: '2px solid white',
+                                    }} />
+                                )}
                             </button>
+                            {showNotifPanel && (
+                                <NotificationPanel onClose={() => setShowNotifPanel(false)} />
+                            )}
                         </div>
                     </header>
 

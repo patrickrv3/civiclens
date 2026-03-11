@@ -1,6 +1,7 @@
 import './globals.css';
 import { AuthProvider } from './context/AuthContext';
 import { ProfileProvider } from './context/ProfileContext';
+import { WatchedBillsProvider } from './context/WatchedBillsContext';
 
 export const metadata = {
   title: 'CivicLens — Your Personal Civic Assistant',
@@ -14,7 +15,9 @@ export default function RootLayout({ children }) {
       <body>
         <AuthProvider>
           <ProfileProvider>
-            {children}
+            <WatchedBillsProvider>
+              {children}
+            </WatchedBillsProvider>
           </ProfileProvider>
         </AuthProvider>
       </body>

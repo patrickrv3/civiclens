@@ -170,3 +170,8 @@
     font-weight: 600;
     margin-left: 2px;
 }
+
+.watching {
+    color: var(--cl-primary-600);
+    background: var(--cl-primary-50);
+}
