@@ -250,6 +250,17 @@ function mapStatus(actionText) {
     return 'Introduced';
 }
 
+// Trim OpenStates abstracts to max 2 sentences or 280 chars
+function condenseSummary(text) {
+    if (!text) return '';
+    const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
+    if (sentences.length <= 2) {
+        return text.trim().slice(0, 320);
+    }
+    const twoSentences = sentences.slice(0, 2).join(' ').trim();
+    return twoSentences.length > 320 ? twoSentences.slice(0, 317) + '...' : twoSentences;
+}
+
 export async function POST(request) {
     try {
         const { zipCode, page, perPage } = await request.json();
@@ -305,7 +316,7 @@ export async function POST(request) {
                 state: stateAbbr,
                 stateName: stateName,
                 date: bill.latest_action_date || bill.first_action_date || '',
-                generalSummary: abstract || `${bill.title} — a ${stateName} state bill currently in the legislature.`,
+                generalSummary: condenseSummary(abstract) || `${bill.title} — a ${stateName} state bill currently in the legislature.`,
                 impactLevel: classifyImpact(bill),
                 status: mapStatus(bill.latest_action_description),
                 latestAction: bill.latest_action_description || '',
