@@ -1,5 +1,21 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { initializeApp, getApps } from 'firebase/app';
+import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+
+// --- Firebase init (server-side, reuse existing app) ---
+const firebaseConfig = {
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+};
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+const db = getFirestore(app);
+
+const CACHE_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
 
 // Define the shape of our mock data as a fallback or structure reference
 // We want OpenAI to return an array of items matching this general structure
@@ -20,6 +36,32 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY || '',
 });
 
+// Check Firestore cache for a single bill
+async function getCachedSummary(billId) {
+    try {
+        const ref = doc(db, 'billSummaries', billId);
+        const snap = await getDoc(ref);
+        if (!snap.exists()) return null;
+        const data = snap.data();
+        // Check TTL
+        const age = Date.now() - (data.cachedAt || 0);
+        if (age > CACHE_TTL_MS) return null;
+        return data;
+    } catch {
+        return null; // Cache miss on error — just call OpenAI
+    }
+}
+
+// Store an AI-generated summary in Firestore
+async function cacheSummary(billId, summaryData) {
+    try {
+        const ref = doc(db, 'billSummaries', billId);
+        await setDoc(ref, { ...summaryData, cachedAt: Date.now() });
+    } catch (err) {
+        console.warn('Cache write failed for', billId, err.message);
+    }
+}
+
 export async function POST(request) {
     try {
         const { lifeTags, interests, offset } = await request.json();
@@ -27,8 +69,6 @@ export async function POST(request) {
 
         // 1. Check for API keys
         if (!process.env.OPENAI_API_KEY || !process.env.CONGRESS_API_KEY) {
-            console.warn("Missing API keys. Returning mock data instead.");
-            // If no keys, we could return the mock data from Step 3, but for now let's return a specific error
             return NextResponse.json(
                 { error: "API Keys missing. Please configure OPENAI_API_KEY and CONGRESS_API_KEY in .env.local" },
                 { status: 500 }
@@ -62,41 +102,97 @@ export async function POST(request) {
             'SRES': 'senate-resolution',
         };
 
-        // Format the bills to send to OpenAI so it has context to summarize
-        const billsTextForAI = bills.map((b) => {
+        // Format all bills for lookup / potential AI processing
+        const billsForProcessing = bills.map((b) => {
             const congressNum = b.congress || 118;
             const typeUpper = b.type ? b.type.toUpperCase() : "HR";
             const slug = typeSlugMap[typeUpper] || 'house-bill';
             const url = "https://www.congress.gov/bill/" + congressNum + "th-congress/" + slug + "/" + b.number;
-
             return {
                 id: congressNum + "-" + typeUpper.toLowerCase() + "-" + b.number,
                 title: b.title,
                 latestAction: b.latestAction?.text || "",
                 updateDate: b.updateDate,
-                url: url
+                url,
             };
         });
 
-        // 3. Ask OpenAI to generate Summaries and tag Impacts
-        const interestsText = interests && interests.length > 0 ? "\n\nThe user is interested in these policy topics: " + interests.join(", ") + ". Please classify and prioritize bills related to these topics with higher impact levels." : "";
-        const userPrompt = "Summarize these corresponding bills and generate personalized impacts for the following Life Tags: " + (lifeTags ? lifeTags.join(", ") : "None") + "." + interestsText + "\n\nBills to process:\n" + JSON.stringify(billsTextForAI, null, 2);
+        // 3. Check Firestore cache for each bill (in parallel)
+        const cacheResults = await Promise.all(
+            billsForProcessing.map(b => getCachedSummary(b.id))
+        );
 
-        const completion = await openai.chat.completions.create({
-            model: "gpt-4o",
-            messages: [
-                { role: "system", content: SYSTEM_PROMPT },
-                { role: "user", content: userPrompt }
-            ],
-            response_format: { type: "json_object" },
+        const cachedItems = [];
+        const uncachedBills = [];
+
+        billsForProcessing.forEach((bill, i) => {
+            if (cacheResults[i]) {
+                // Cache hit — use stored summary, attach url from current fetch
+                cachedItems.push({ ...cacheResults[i], url: bill.url });
+            } else {
+                uncachedBills.push(bill);
+            }
         });
 
-        const aiResponse = JSON.parse(completion.choices[0].message.content);
+        // 4. Only call OpenAI for bills not in cache
+        let aiItems = [];
+        if (uncachedBills.length > 0) {
+            const interestsText = interests && interests.length > 0
+                ? "\n\nThe user is interested in these policy topics: " + interests.join(", ") + ". Please classify and prioritize bills related to these topics with higher impact levels."
+                : "";
+            const userPrompt = "Summarize these corresponding bills and generate personalized impacts for the following Life Tags: " + (lifeTags ? lifeTags.join(", ") : "None") + "." + interestsText + "\n\nBills to process:\n" + JSON.stringify(uncachedBills, null, 2);
 
-        // 4. Return formatted data to the frontend
+            const completion = await openai.chat.completions.create({
+                model: "gpt-4o-mini", // Faster and cheaper than gpt-4o
+                messages: [
+                    { role: "system", content: SYSTEM_PROMPT },
+                    { role: "user", content: userPrompt }
+                ],
+                response_format: { type: "json_object" },
+            });
+
+            const aiResponse = JSON.parse(completion.choices[0].message.content);
+            aiItems = aiResponse.bills || [];
+
+            // 5. Save new summaries to Firestore cache (fire-and-forget)
+            aiItems.forEach(item => {
+                if (item.id) {
+                    cacheSummary(item.id, {
+                        id: item.id,
+                        shortTitle: item.shortTitle,
+                        originalTitle: item.originalTitle,
+                        generalSummary: item.generalSummary,
+                        impactLevel: item.impactLevel,
+                        status: item.status,
+                        latestAction: item.latestAction,
+                        type: item.type || 'Bill',
+                        level: item.level || 'Federal',
+                        date: item.date || '',
+                        sponsors: item.sponsors || [],
+                        locationMatches: item.locationMatches || [],
+                        likes: 0,
+                        dislikes: 0,
+                        // Note: tagImpacts are user-specific, not cached
+                    });
+                }
+            });
+        }
+
+        // 6. Merge cached + fresh items, preserving Congress.gov order
+        const allItemsById = new Map();
+        [...cachedItems, ...aiItems].forEach(item => {
+            if (item.id) allItemsById.set(item.id, item);
+        });
+        const orderedItems = billsForProcessing
+            .map(b => allItemsById.get(b.id))
+            .filter(Boolean);
+
         const pagination = data.pagination || {};
         const hasMore = (pageOffset + batchSize) < (pagination.count || 0);
-        return NextResponse.json({ items: aiResponse.bills, hasMore, nextOffset: pageOffset + batchSize });
+
+        console.log(`Feed: ${cachedItems.length} from cache, ${aiItems.length} from OpenAI`);
+
+        return NextResponse.json({ items: orderedItems, hasMore, nextOffset: pageOffset + batchSize });
 
     } catch (error) {
         console.error("Error in feed API:", error);
