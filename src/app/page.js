@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import AppShell from './components/AppShell';
 import styles from './page.module.css';
 import { useProfile } from './context/ProfileContext';
@@ -67,10 +67,15 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Runs ONCE on mount
 
+  // Scroll anchor — preserves scroll position when new items are appended
+  const scrollAnchorY = useRef(null);
+
   // Load more bills — used by IntersectionObserver
   const loadMore = useCallback(async () => {
     if (isLoadingMoreRef.current || !hasMore) return;
     isLoadingMoreRef.current = true;
+    // Capture scroll position BEFORE state update
+    scrollAnchorY.current = window.scrollY;
     setIsLoadingMore(true);
     try {
       const response = await fetch('/api/feed', {
@@ -90,6 +95,14 @@ export default function Home() {
       isLoadingMoreRef.current = false;
     }
   }, [hasMore, nextOffset, profile?.lifeTags, profile?.interests]);
+
+  // After new items render, restore scroll position so viewport doesn't jump
+  useLayoutEffect(() => {
+    if (scrollAnchorY.current !== null) {
+      window.scrollTo({ top: scrollAnchorY.current, behavior: 'instant' });
+      scrollAnchorY.current = null;
+    }
+  }, [feedItems.length]);
 
   // IntersectionObserver: auto-load when sentinel enters viewport
   useEffect(() => {
