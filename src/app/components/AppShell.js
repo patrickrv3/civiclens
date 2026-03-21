@@ -172,7 +172,7 @@ export default function AppShell({ children }) {
 
                     <div className={styles.sidebarFooter}>
                         {user ? (
-                            <div className={styles.userCard} onClick={() => { if (profile.hasCompletedOnboarding) { setActivePage('settings'); } else { setModalOpen(true); } }}>
+                            <div className={styles.userCard} onClick={() => { if (profile.hasCompletedOnboarding) { setActivePage('settings'); setSidebarOpen(false); } else { setModalOpen(true); setSidebarOpen(false); } }}>
                                 <div className={styles.userAvatar}>
                                     {user.displayName ? user.displayName[0].toUpperCase() : user.email[0].toUpperCase()}
                                 </div>
