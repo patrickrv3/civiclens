@@ -55,8 +55,8 @@ export function AuthProvider({ children }) {
 
     const signInWithGoogle = async () => {
         const provider = new GoogleAuthProvider();
-        // Use redirect (more reliable on custom domains + mobile) instead of popup
-        return signInWithRedirect(auth, provider);
+        // Back to popup now that authDomain is correctly configured
+        return signInWithPopup(auth, provider);
     };
 
     const logOut = async () => {

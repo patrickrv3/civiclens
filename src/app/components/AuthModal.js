@@ -63,14 +63,15 @@ export default function AuthModal({ onClose, onSignUp }) {
         setError('');
         setIsLoading(true);
         try {
-            // signInWithRedirect navigates away — no need to onClose() here
-            // The user will return to the app already signed in
             await signInWithGoogle();
+            onClose();
+            if (onSignUp) onSignUp();
         } catch (err) {
             console.error('Google sign-in error:', err.code, err.message);
             if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
-                setError('Google sign-in failed. Please try again.');
+                setError(`Sign-in failed (${err.code || 'unknown'}). Please try again.`);
             }
+        } finally {
             setIsLoading(false);
         }
     };
