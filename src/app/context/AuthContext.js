@@ -6,6 +6,8 @@ import {
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
     signInWithPopup,
+    signInWithRedirect,
+    getRedirectResult,
     GoogleAuthProvider,
     signOut as firebaseSignOut,
 } from 'firebase/auth';
@@ -26,6 +28,12 @@ export function AuthProvider({ children }) {
             setUser(firebaseUser);
             setLoading(false);
         });
+
+        // Handle redirect result after Google sign-in redirect
+        getRedirectResult(auth).catch((err) => {
+            console.warn('Redirect result error:', err);
+        });
+
         return () => unsubscribe();
     }, []);
 
@@ -39,7 +47,8 @@ export function AuthProvider({ children }) {
 
     const signInWithGoogle = async () => {
         const provider = new GoogleAuthProvider();
-        return signInWithPopup(auth, provider);
+        // Use redirect (more reliable on custom domains + mobile) instead of popup
+        return signInWithRedirect(auth, provider);
     };
 
     const logOut = async () => {
