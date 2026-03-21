@@ -22,6 +22,7 @@ export function useAuth() {
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [redirectError, setRedirectError] = useState(null);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -29,10 +30,17 @@ export function AuthProvider({ children }) {
             setLoading(false);
         });
 
-        // Handle redirect result after Google sign-in redirect
-        getRedirectResult(auth).catch((err) => {
-            console.warn('Redirect result error:', err);
-        });
+        // Handle result when user returns from Google redirect
+        getRedirectResult(auth)
+            .then((result) => {
+                if (result?.user) {
+                    console.log('Redirect sign-in succeeded:', result.user.email);
+                }
+            })
+            .catch((err) => {
+                console.error('getRedirectResult error — code:', err.code, 'message:', err.message);
+                setRedirectError(err.code || err.message);
+            });
 
         return () => unsubscribe();
     }, []);
@@ -56,7 +64,7 @@ export function AuthProvider({ children }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, signUp, signIn, signInWithGoogle, logOut }}>
+        <AuthContext.Provider value={{ user, loading, redirectError, signUp, signIn, signInWithGoogle, logOut }}>
             {children}
         </AuthContext.Provider>
     );
