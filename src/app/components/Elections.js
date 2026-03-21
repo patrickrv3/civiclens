@@ -40,7 +40,7 @@ const CHECKLIST_ITEMS = [
     { id: 'reps', label: 'Look up your representatives' },
     { id: 'bills', label: 'Read about upcoming bills in your feed' },
     { id: 'contact', label: 'Contact a representative about an issue' },
-    { id: 'share', label: 'Share CivicLens with a friend' },
+    { id: 'share', label: 'Share Civisly with a friend' },
 ];
 
 /* ====== Quick Actions ====== */

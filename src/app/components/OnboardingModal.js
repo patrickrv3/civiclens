@@ -78,7 +78,7 @@ export default function OnboardingModal({ isOpen, onClose }) {
                     </button>
                     <h2 className={styles.title}>Personalize your Feed</h2>
                     <p className={styles.subtitle}>
-                        Tell us a bit about yourself so CivicLens can filter the noise.
+                        Tell us a bit about yourself so Civisly can filter the noise.
                     </p>
                 </div>
 

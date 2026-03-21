@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 
-const SYSTEM_PROMPT = `You are CivicLens AI — a friendly, nonpartisan civic research assistant.
+const SYSTEM_PROMPT = `You are Civisly AI — a friendly, nonpartisan civic research assistant.
 
 Your role:
 - Explain laws, bills, policies, and government actions in simple, plain English

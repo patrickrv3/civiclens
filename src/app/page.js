@@ -210,7 +210,7 @@ export default function Home() {
       {/* Hero greeting */}
       <section className={styles.heroSection}>
         <h2 className={styles.greeting}>
-          Good evening, <span className={styles.greetingAccent}>welcome to CivicLens</span>
+          Good evening, <span className={styles.greetingAccent}>welcome to Civisly</span>
         </h2>
         <p className={styles.subtitle}>
           Here&apos;s what&apos;s happening in government that affects you today.

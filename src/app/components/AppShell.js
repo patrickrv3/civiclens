@@ -135,7 +135,7 @@ export default function AppShell({ children }) {
                             {Icons.logo}
                         </div>
                         <div className={styles.logoText}>
-                            Civic<span>Lens</span>
+                            Civis<span>ly</span>
                         </div>
                     </div>
 
@@ -236,7 +236,7 @@ export default function AppShell({ children }) {
                             <h1 className={styles.pageTitle}>
                                 {navItems.find(i => i.id === activePage)?.label ||
                                     secondaryNavItems.find(i => i.id === activePage)?.label ||
-                                    'CivicLens'}
+                                    'Civisly'}
                             </h1>
                         </div>
 

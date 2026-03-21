@@ -255,7 +255,7 @@ export default function AIAssistant({ initialQuestion, onQuestionConsumed }) {
                     </button>
                 </div>
                 <p className={styles.inputHint}>
-                    CivicLens AI is nonpartisan and may occasionally make mistakes. Verify important information.
+                    Civisly AI is nonpartisan and may occasionally make mistakes. Verify important information.
                 </p>
             </div>
         </div>
