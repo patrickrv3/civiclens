@@ -106,7 +106,9 @@ export default function Home() {
       window.scrollTo({ top: scrollAnchorY.current, behavior: 'instant' });
       scrollAnchorY.current = null;
     }
-  }, [feedItems.length]);
+  // Fires for both federal and state feed appends
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feedItems.length, stateFeedItems.length]);
 
   // Load more state bills — declared BEFORE IntersectionObserver to avoid TDZ
   const loadMoreState = useCallback(async () => {
@@ -408,10 +410,10 @@ export default function Home() {
           </div>
         )}
 
-        {/* Infinite scroll sentinel — only for logged-in users */}
-        {user && hasMore && <div ref={sentinelRef} style={{ height: '1px' }} />}
+        {/* Infinite scroll sentinel — visible for both federal and state tabs */}
+        {user && (hasMore || stateHasMore) && <div ref={sentinelRef} style={{ height: '1px' }} />}
 
-        {user && isLoadingMore && (
+        {user && (isLoadingMore || isLoadingMoreState) && (
           <div style={{ textAlign: 'center', padding: '32px 0', color: '#555' }}>
             <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '12px' }}>
               <div style={{
