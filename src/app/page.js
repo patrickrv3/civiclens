@@ -24,15 +24,19 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingState, setIsLoadingState] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isLoadingMoreState, setIsLoadingMoreState] = useState(false);
   const [isPersonalizing, setIsPersonalizing] = useState(false);
   const [error, setError] = useState(null);
   const [hasMore, setHasMore] = useState(false);
   const [nextOffset, setNextOffset] = useState(0);
+  const [stateHasMore, setStateHasMore] = useState(false);
+  const [stateNextPage, setStateNextPage] = useState(2);
   const [stateInfo, setStateInfo] = useState(null);
   const hasLoadedOnce = useRef(false);
   const hasLoadedState = useRef(false);
   const sentinelRef = useRef(null);
   const isLoadingMoreRef = useRef(false);
+  const isLoadingMoreStateRef = useRef(false);
 
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
@@ -104,23 +108,26 @@ export default function Home() {
     }
   }, [feedItems.length]);
 
-  // IntersectionObserver: auto-load when sentinel enters viewport
+  // IntersectionObserver: auto-load when sentinel enters viewport (tab-aware)
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !isLoadingMoreRef.current) {
-          loadMore();
+        if (!entries[0].isIntersecting) return;
+        if (activeTab === 'State & Local') {
+          if (stateHasMore && !isLoadingMoreStateRef.current) loadMoreState();
+        } else {
+          if (hasMore && !isLoadingMoreRef.current) loadMore();
         }
       },
-      { rootMargin: '0px' } // Fire only when sentinel is actually visible
+      { rootMargin: '0px' }
     );
 
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [hasMore, loadMore]);
+  }, [hasMore, loadMore, stateHasMore, loadMoreState, activeTab]);
 
 
   // Layer 2: Fast re-personalize tag impacts when profile tags change
@@ -177,6 +184,8 @@ export default function Home() {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Failed to fetch state feed');
         setStateFeedItems(data.items || []);
+        setStateHasMore(data.hasMore || false);
+        setStateNextPage(2);
         setStateInfo({ state: data.state, stateName: data.stateName });
         hasLoadedState.current = true;
       } catch (err) {
@@ -187,6 +196,32 @@ export default function Home() {
     }
     fetchStateFeed();
   }, [activeTab, profile?.location?.zipCode]);
+
+  // Load more state bills
+  const loadMoreState = useCallback(async () => {
+    if (isLoadingMoreStateRef.current || !stateHasMore) return;
+    if (!profile?.location?.zipCode) return;
+    isLoadingMoreStateRef.current = true;
+    setIsLoadingMoreState(true);
+    try {
+      const response = await fetch('/api/state-feed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ zipCode: profile.location.zipCode, page: stateNextPage, perPage: 15 }),
+      });
+      const data = await response.json();
+      if (!response.ok) return;
+      scrollAnchorY.current = window.scrollY;
+      setStateFeedItems(prev => [...prev, ...(data.items || [])]);
+      setStateHasMore(data.hasMore || false);
+      setStateNextPage(p => p + 1);
+    } catch (err) {
+      console.warn('Failed to load more state bills:', err);
+    } finally {
+      setIsLoadingMoreState(false);
+      isLoadingMoreStateRef.current = false;
+    }
+  }, [stateHasMore, stateNextPage, profile?.location?.zipCode]);
 
   const impactOrder = { 'High Impact': 0, 'Moderate Impact': 1, 'Low Impact': 2 };
 
