@@ -67,15 +67,13 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Runs ONCE on mount
 
-  // Scroll anchor — preserves scroll position when new items are appended
+  // Scroll anchor — captures scroll at the exact moment new items are about to be painted
   const scrollAnchorY = useRef(null);
 
   // Load more bills — used by IntersectionObserver
   const loadMore = useCallback(async () => {
     if (isLoadingMoreRef.current || !hasMore) return;
     isLoadingMoreRef.current = true;
-    // Capture scroll position BEFORE state update
-    scrollAnchorY.current = window.scrollY;
     setIsLoadingMore(true);
     try {
       const response = await fetch('/api/feed', {
@@ -85,6 +83,8 @@ export default function Home() {
       });
       const data = await response.json();
       if (!response.ok) return;
+      // Capture scroll RIGHT before React batches the new items into the DOM
+      scrollAnchorY.current = window.scrollY;
       setFeedItems(prev => [...prev, ...(data.items || [])]);
       setHasMore(data.hasMore || false);
       setNextOffset(data.nextOffset || 0);
@@ -96,7 +96,7 @@ export default function Home() {
     }
   }, [hasMore, nextOffset, profile?.lifeTags, profile?.interests]);
 
-  // After new items render, restore scroll position so viewport doesn't jump
+  // Immediately after new items paint, restore scroll so viewport doesn't shift
   useLayoutEffect(() => {
     if (scrollAnchorY.current !== null) {
       window.scrollTo({ top: scrollAnchorY.current, behavior: 'instant' });
@@ -115,7 +115,7 @@ export default function Home() {
           loadMore();
         }
       },
-      { rootMargin: '200px' } // Trigger 200px before reaching the bottom
+      { rootMargin: '0px' } // Fire only when sentinel is actually visible
     );
 
     observer.observe(sentinel);
