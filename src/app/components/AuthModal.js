@@ -86,7 +86,7 @@ export default function AuthModal({ onClose, onSignUp }) {
 
                     <div className={styles.header}>
                         <div className={styles.logo}>
-                            Civic<span className={styles.logoAccent}>Lens</span>
+                            Civis<span className={styles.logoAccent}>ly</span>
                         </div>
                         <p className={styles.headerSubtitle}>
                             {mode === 'signin' ? 'Welcome back! Sign in to sync your data.' : 'Create an account to save your progress.'}
