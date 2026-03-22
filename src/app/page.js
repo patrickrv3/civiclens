@@ -125,7 +125,12 @@ export default function Home() {
       const data = await response.json();
       if (!response.ok) return;
       scrollAnchorY.current = window.scrollY;
-      setStateFeedItems(prev => [...prev, ...(data.items || [])]);
+      // Pre-sort this batch so new items don't reposition above the viewport
+      const newSorted = (data.items || []).sort((a, b) => {
+        const order = { 'High Impact': 0, 'Moderate Impact': 1, 'Low Impact': 2 };
+        return (order[a.impactLevel] ?? 3) - (order[b.impactLevel] ?? 3);
+      });
+      setStateFeedItems(prev => [...prev, ...newSorted]);
       setStateHasMore(data.hasMore || false);
       setStateNextPage(p => p + 1);
     } catch (err) {
@@ -211,7 +216,11 @@ export default function Home() {
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Failed to fetch state feed');
-        setStateFeedItems(data.items || []);
+        // Pre-sort at load time so re-renders never reposition items above the viewport
+        const sorted = (data.items || []).sort((a, b) =>
+          (stateImpactOrder[a.impactLevel] ?? 3) - (stateImpactOrder[b.impactLevel] ?? 3)
+        );
+        setStateFeedItems(sorted);
         setStateHasMore(data.hasMore || false);
         setStateNextPage(2);
         setStateInfo({ state: data.state, stateName: data.stateName });
@@ -228,13 +237,17 @@ export default function Home() {
   // (loadMoreState moved above IntersectionObserver — see above)
 
   const impactOrder = { 'High Impact': 0, 'Moderate Impact': 1, 'Low Impact': 2 };
+  // Separate const so it can be referenced inside fetchStateFeed useEffect
+  const stateImpactOrder = { 'High Impact': 0, 'Moderate Impact': 1, 'Low Impact': 2 };
 
   const filteredItems = (() => {
     let items;
     if (activeTab === 'Federal') {
       items = feedItems.filter(item => item.level === 'Federal');
     } else if (activeTab === 'State & Local') {
-      items = stateFeedItems;
+      // State items are pre-sorted at load time — DO NOT re-sort here
+      // Re-sorting the full array on each render causes items to jump above the viewport
+      return stateFeedItems;
     } else {
       items = [...feedItems, ...stateFeedItems];
     }
