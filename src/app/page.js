@@ -108,6 +108,32 @@ export default function Home() {
     }
   }, [feedItems.length]);
 
+  // Load more state bills — declared BEFORE IntersectionObserver to avoid TDZ
+  const loadMoreState = useCallback(async () => {
+    if (isLoadingMoreStateRef.current || !stateHasMore) return;
+    if (!profile?.location?.zipCode) return;
+    isLoadingMoreStateRef.current = true;
+    setIsLoadingMoreState(true);
+    try {
+      const response = await fetch('/api/state-feed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ zipCode: profile.location.zipCode, page: stateNextPage, perPage: 15 }),
+      });
+      const data = await response.json();
+      if (!response.ok) return;
+      scrollAnchorY.current = window.scrollY;
+      setStateFeedItems(prev => [...prev, ...(data.items || [])]);
+      setStateHasMore(data.hasMore || false);
+      setStateNextPage(p => p + 1);
+    } catch (err) {
+      console.warn('Failed to load more state bills:', err);
+    } finally {
+      setIsLoadingMoreState(false);
+      isLoadingMoreStateRef.current = false;
+    }
+  }, [stateHasMore, stateNextPage, profile?.location?.zipCode]);
+
   // IntersectionObserver: auto-load when sentinel enters viewport (tab-aware)
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -197,31 +223,7 @@ export default function Home() {
     fetchStateFeed();
   }, [activeTab, profile?.location?.zipCode]);
 
-  // Load more state bills
-  const loadMoreState = useCallback(async () => {
-    if (isLoadingMoreStateRef.current || !stateHasMore) return;
-    if (!profile?.location?.zipCode) return;
-    isLoadingMoreStateRef.current = true;
-    setIsLoadingMoreState(true);
-    try {
-      const response = await fetch('/api/state-feed', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ zipCode: profile.location.zipCode, page: stateNextPage, perPage: 15 }),
-      });
-      const data = await response.json();
-      if (!response.ok) return;
-      scrollAnchorY.current = window.scrollY;
-      setStateFeedItems(prev => [...prev, ...(data.items || [])]);
-      setStateHasMore(data.hasMore || false);
-      setStateNextPage(p => p + 1);
-    } catch (err) {
-      console.warn('Failed to load more state bills:', err);
-    } finally {
-      setIsLoadingMoreState(false);
-      isLoadingMoreStateRef.current = false;
-    }
-  }, [stateHasMore, stateNextPage, profile?.location?.zipCode]);
+  // (loadMoreState moved above IntersectionObserver — see above)
 
   const impactOrder = { 'High Impact': 0, 'Moderate Impact': 1, 'Low Impact': 2 };
 
