@@ -5,7 +5,9 @@ import AppShell from './components/AppShell';
 import styles from './page.module.css';
 import { useProfile } from './context/ProfileContext';
 import { useAuth } from './context/AuthContext';
+import { useSubscription } from './context/SubscriptionContext';
 import FeedCard from './components/FeedCard';
+import UpgradeModal from './components/UpgradeModal';
 
 /* Inline icons for the dashboard */
 const CalendarIcon = () => (
@@ -17,6 +19,8 @@ const CalendarIcon = () => (
 export default function Home() {
   const { profile } = useProfile();
   const { user } = useAuth();
+  const { isPro } = useSubscription();
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [activeTab, setActiveTab] = useState('All');
   const [sortBy, setSortBy] = useState('impact'); // 'impact' | 'recent'
   const [feedItems, setFeedItems] = useState([]);
@@ -301,9 +305,12 @@ export default function Home() {
               </button>
               <button
                 className={`${styles.tabBtn} ${activeTab === 'State & Local' ? styles.tabActive : ''}`}
-                onClick={() => setActiveTab('State & Local')}
+                onClick={() => {
+                  if (!isPro) { setShowUpgradeModal(true); return; }
+                  setActiveTab('State & Local');
+                }}
               >
-                State &amp; Local
+                State &amp; Local {!isPro && <span style={{ fontSize: '0.7rem', marginLeft: '4px' }}>🔒</span>}
               </button>
             </div>
 
@@ -471,6 +478,7 @@ export default function Home() {
           <button className={styles.ctaButton} onClick={() => alert('Please use the sidebar to open the profile setup.')}>Get Started</button>
         </div>
       )}
+      {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} />}
     </AppShell>
   );
 }

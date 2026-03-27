@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import styles from './Settings.module.css';
 import { useProfile } from '../context/ProfileContext';
 import { useAuth } from '../context/AuthContext';
+import { useSubscription } from '../context/SubscriptionContext';
 
 const LIFE_TAGS = [
     'Homeowner', 'Renter', 'Student', 'Parent', 'Veteran',
@@ -21,6 +22,7 @@ const POLICY_INTERESTS = [
 export default function Settings() {
     const { profile, updateProfile } = useProfile();
     const { user, logOut } = useAuth();
+    const { isPro, subscription, startCheckout, openPortal } = useSubscription();
     const [zip, setZip] = useState(profile.location?.zipCode || '');
     const [showSaved, setShowSaved] = useState(false);
     const saveTimeout = useRef(null);
@@ -158,6 +160,61 @@ export default function Settings() {
                             onClick={togglePersonalizedImpact}
                         />
                     </div>
+                </div>
+            </div>
+
+            {/* Subscription */}
+            <div className={styles.section}>
+                <div className={styles.sectionTitle}>⚡ Subscription</div>
+                <div className={styles.card}>
+                    {isPro ? (
+                        <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                                <span style={{
+                                    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                                    color: '#fff', borderRadius: '99px',
+                                    padding: '3px 12px', fontSize: '0.8rem', fontWeight: 700,
+                                }}>Pro Member ✓</span>
+                                <span style={{ fontSize: '0.85rem', color: 'var(--cl-gray-500)' }}>$4.99/month</span>
+                            </div>
+                            <p style={{ fontSize: '0.85rem', color: 'var(--cl-gray-500)', marginBottom: '14px' }}>
+                                You have full access to State &amp; Local legislation and bill tracking notifications.
+                            </p>
+                            <button
+                                onClick={openPortal}
+                                style={{
+                                    padding: '9px 18px', borderRadius: '10px',
+                                    border: '1px solid var(--cl-gray-200)',
+                                    background: '#fff', cursor: 'pointer',
+                                    fontSize: '0.85rem', fontWeight: 600,
+                                    color: 'var(--cl-gray-700)',
+                                }}
+                            >
+                                Manage Subscription →
+                            </button>
+                        </div>
+                    ) : (
+                        <div>
+                            <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '6px', color: 'var(--cl-gray-900)' }}>
+                                Upgrade to Civisly Pro
+                            </div>
+                            <p style={{ fontSize: '0.85rem', color: 'var(--cl-gray-500)', marginBottom: '14px' }}>
+                                Get access to State &amp; Local legislation, bill watching, and in-app notifications — just $4.99/month.
+                            </p>
+                            <button
+                                onClick={startCheckout}
+                                style={{
+                                    padding: '11px 22px', borderRadius: '12px',
+                                    background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                                    color: '#fff', fontWeight: 700, fontSize: '0.9rem',
+                                    border: 'none', cursor: 'pointer',
+                                    boxShadow: '0 4px 12px rgba(99,102,241,0.35)',
+                                }}
+                            >
+                                Upgrade — $4.99/month
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 

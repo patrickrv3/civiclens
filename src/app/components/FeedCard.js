@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import styles from './FeedCard.module.css';
 import { useAskAI } from './AppShell';
 import { useWatchedBills } from '../context/WatchedBillsContext';
 import { useAuth } from '../context/AuthContext';
+import { useSubscription } from '../context/SubscriptionContext';
+import UpgradeModal from './UpgradeModal';
 
 // SVG Icons
 const AlertCircleIcon = () => (
@@ -54,14 +56,20 @@ const BellIcon = ({ filled }) => (
 export default function FeedCard({ item, profile }) {
     const onAskAI = useAskAI();
     const { user } = useAuth();
+    const { isPro } = useSubscription();
     const { isWatching, watchBill, unwatchBill } = useWatchedBills();
     const [reaction, setReaction] = useState(null);
     const [expanded, setExpanded] = useState(false);
+    const [showUpgrade, setShowUpgrade] = useState(false);
     const watching = isWatching(item.id);
 
     const handleWatch = async () => {
         if (!user) {
             window.dispatchEvent(new CustomEvent('civiclens:openAuth'));
+            return;
+        }
+        if (!isPro) {
+            setShowUpgrade(true);
             return;
         }
         if (watching) {
@@ -107,6 +115,7 @@ export default function FeedCard({ item, profile }) {
     if (item.type === 'Law') badgeClass = styles.badgeLaw;
 
     return (
+        <>
         <article className={styles.feedCard}>
             <div className={styles.feedHeader}>
                 <div className={styles.feedMeta}>
@@ -243,5 +252,7 @@ export default function FeedCard({ item, profile }) {
                 </button>
             </div>
         </article>
+        {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
+        </>
     );
 }

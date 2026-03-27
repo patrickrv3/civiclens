@@ -12,6 +12,8 @@ import AuthModal from './AuthModal';
 import NotificationPanel from './NotificationPanel';
 import { useAuth } from '../context/AuthContext';
 import { useWatchedBills } from '../context/WatchedBillsContext';
+import { useSubscription } from '../context/SubscriptionContext';
+import UpgradeModal from './UpgradeModal';
 
 // Context to share the askAI callback with any descendant
 const AskAIContext = createContext(null);
@@ -93,14 +95,22 @@ export default function AppShell({ children }) {
     const { profile, getPrimaryLocation } = useProfile();
     const { user, logOut } = useAuth();
     const { unreadCount } = useWatchedBills();
+    const { isPro } = useSubscription();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [activePage, setActivePage] = useState('feed');
     const [modalOpen, setModalOpen] = useState(false);
     const [showAuthModal, setShowAuthModal] = useState(false);
     const [showNotifPanel, setShowNotifPanel] = useState(false);
     const [askAIQuestion, setAskAIQuestion] = useState(null);
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
     const handleNavClick = (id) => {
+        // Gate State & Local behind Pro subscription
+        if (id === 'state' && !isPro) {
+            setShowUpgradeModal(true);
+            setSidebarOpen(false);
+            return;
+        }
         setActivePage(id);
         setSidebarOpen(false);
     };
@@ -300,6 +310,7 @@ export default function AppShell({ children }) {
                         }}
                     />
                 )}
+                {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} />}
             </div>
         </AskAIContext.Provider>
     );
