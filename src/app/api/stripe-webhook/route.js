@@ -1,20 +1,25 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+
+// Initialize Firebase Admin SDK (bypasses Firestore security rules — server only)
+function getAdminDb() {
+    if (getApps().length === 0) {
+        initializeApp({
+            credential: cert({
+                projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
+                clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+                // Vercel stores multiline values with \n — replace to get real newlines
+                privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+            }),
+        });
+    }
+    return getFirestore();
+}
 
 export async function POST(request) {
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-    const firebaseConfig = {
-        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-    };
-    const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-    const db = getFirestore(app);
     const body = await request.text();
     const sig = request.headers.get('stripe-signature');
 
@@ -27,6 +32,8 @@ export async function POST(request) {
     }
 
     try {
+        const db = getAdminDb();
+
         if (event.type === 'checkout.session.completed') {
             const session = event.data.object;
             const uid = session.metadata?.uid;
@@ -34,7 +41,7 @@ export async function POST(request) {
             const subscriptionId = session.subscription;
 
             if (uid) {
-                await setDoc(doc(db, 'users', uid, 'subscription', 'pro'), {
+                await db.doc(`users/${uid}/subscription/pro`).set({
                     status: 'active',
                     plan: 'pro',
                     stripeCustomerId: customerId,
@@ -48,28 +55,20 @@ export async function POST(request) {
         if (event.type === 'customer.subscription.deleted' || event.type === 'customer.subscription.updated') {
             const subscription = event.data.object;
             const customerId = subscription.customer;
-            const status = subscription.status; // 'active', 'canceled', 'past_due'
+            const newStatus = subscription.status; // 'active', 'canceled', 'past_due'
 
-            // Find user by stripeCustomerId
-            const usersRef = collection(db, 'users');
-            // We need to search subcollections — search by stripeCustomerId stored in subscription doc
-            // Use a collectionGroup query
-            const subQuery = query(
-                collection(db, 'users'),
-                where('stripeCustomerId', '==', customerId)
-            );
-            // Since subscription is a subcollection, query the subscriptions collectionGroup
-            const { collectionGroup } = await import('firebase/firestore');
-            const cgQuery = query(collectionGroup(db, 'subscription'), where('stripeCustomerId', '==', customerId));
-            const snap = await getDocs(cgQuery);
+            // Find user subscription doc by stripeCustomerId using collectionGroup query
+            const snap = await db.collectionGroup('subscription')
+                .where('stripeCustomerId', '==', customerId)
+                .get();
 
             for (const docSnap of snap.docs) {
-                await setDoc(docSnap.ref, {
+                await docSnap.ref.set({
                     ...docSnap.data(),
-                    status: status === 'active' ? 'active' : 'canceled',
-                    canceledAt: status !== 'active' ? Date.now() : null,
+                    status: newStatus === 'active' ? 'active' : 'canceled',
+                    updatedAt: Date.now(),
                 }, { merge: true });
-                console.log(`Updated subscription status to ${status} for customer: ${customerId}`);
+                console.log(`Updated subscription to ${newStatus} for customer: ${customerId}`);
             }
         }
 
