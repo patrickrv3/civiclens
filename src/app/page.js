@@ -49,22 +49,52 @@ export default function Home() {
     day: 'numeric',
   });
 
-  // Layer 1: Fetch the base feed ONCE on mount (Congress + OpenAI general summaries)
+  // Layer 1: Fetch the base feed ONCE on mount (Congress bills + Executive Orders + OpenAI summaries)
   useEffect(() => {
     async function fetchBaseFeed() {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch('/api/feed', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lifeTags: profile?.lifeTags || [], interests: profile?.interests || [], offset: 0 }),
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Failed to fetch feed');
-        setFeedItems(data.items || []);
-        setHasMore(data.hasMore || false);
-        setNextOffset(data.nextOffset || 0);
+        const payload = {
+          lifeTags: profile?.lifeTags || [],
+          interests: profile?.interests || [],
+          offset: 0,
+        };
+
+        // Fetch bills and executive orders in parallel
+        const [feedRes, eoRes] = await Promise.all([
+          fetch('/api/feed', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }),
+          fetch('/api/executive-orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }),
+        ]);
+
+        const feedData = await feedRes.json();
+        if (!feedRes.ok) throw new Error(feedData.error || 'Failed to fetch feed');
+
+        // Merge EOs into the feed (EO errors are non-fatal)
+        let eoItems = [];
+        if (eoRes.ok) {
+          const eoData = await eoRes.json();
+          eoItems = eoData.items || [];
+        } else {
+          console.warn('Executive orders fetch failed — feed will show bills only');
+        }
+
+        // Merge: interleave EOs with bills, sorted by date descending
+        const allFederal = [...(feedData.items || []), ...eoItems].sort(
+          (a, b) => new Date(b.date || 0) - new Date(a.date || 0)
+        );
+
+        setFeedItems(allFederal);
+        setHasMore(feedData.hasMore || false);
+        setNextOffset(feedData.nextOffset || 0);
       } catch (err) {
         setError(err.message);
       } finally {

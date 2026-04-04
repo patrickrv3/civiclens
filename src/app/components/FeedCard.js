@@ -110,7 +110,7 @@ export default function FeedCard({ item, profile }) {
 
     // Determine badge class dynamically
     let badgeClass = styles.badgeBill;
-    if (item.type === 'Executive') badgeClass = styles.badgeExecutive;
+    if (item.type === 'Executive Order' || item.type === 'Executive') badgeClass = styles.badgeExecutive;
     if (item.type === 'Court') badgeClass = styles.badgeCourt;
     if (item.type === 'Law') badgeClass = styles.badgeLaw;
 
