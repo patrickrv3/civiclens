@@ -190,9 +190,11 @@ export async function POST(request) {
             .filter(Boolean);
 
         const pagination = data.pagination || {};
-        const hasMore = (pageOffset + batchSize) < (pagination.count || 0);
+        // pagination.count = items in THIS page (e.g. 10), NOT the total.
+        // pagination.next = URL for the next page — only present if more pages exist.
+        const hasMore = !!pagination.next;
 
-        console.log(`Feed: ${cachedItems.length} from cache, ${aiItems.length} from OpenAI`);
+        console.log(`Feed: ${cachedItems.length} from cache, ${aiItems.length} from OpenAI, hasMore=${hasMore}`);
 
         return NextResponse.json({ items: orderedItems, hasMore, nextOffset: pageOffset + batchSize });
 
