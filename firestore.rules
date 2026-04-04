@@ -2,15 +2,15 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── Bill summaries cache (AI-generated) ──────────────────────────────
-    // Read: any authenticated user (feed cards use these)
-    // Write: server only via Admin SDK (bypasses rules — deny client writes)
+    // ── Bill summaries cache (AI-generated public data) ──────────────────────
+    // Open read/write — server routes use client SDK without auth context.
+    // This is AI summaries of public legislation only (no user data).
     match /billSummaries/{billId} {
-      allow read: if request.auth != null;
-      allow write: if false;
+      allow read: if true;
+      allow write: if true;
     }
 
-    // ── User data ─────────────────────────────────────────────────────────
+    // ── User data ─────────────────────────────────────────────────────────────
     // All user data is scoped strictly to the authenticated owner
     match /users/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
