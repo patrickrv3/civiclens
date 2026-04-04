@@ -61,7 +61,7 @@ export default function Home() {
           offset: 0,
         };
 
-        // Fetch bills and executive orders in parallel
+        // Fetch bills and executive orders in parallel — EO fetch is fully isolated
         const [feedRes, eoRes] = await Promise.all([
           fetch('/api/feed', {
             method: 'POST',
@@ -72,24 +72,27 @@ export default function Home() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
-          }),
+          }).catch(() => null), // Network-level failure is non-fatal
         ]);
 
         const feedData = await feedRes.json();
         if (!feedRes.ok) throw new Error(feedData.error || 'Failed to fetch feed');
 
-        // Merge EOs into the feed (EO errors are non-fatal)
+        // Safely parse EOs — any failure here is non-fatal
         let eoItems = [];
-        if (eoRes.ok) {
-          const eoData = await eoRes.json();
-          eoItems = eoData.items || [];
-        } else {
-          console.warn('Executive orders fetch failed — feed will show bills only');
+        try {
+          if (eoRes && eoRes.ok) {
+            const eoData = await eoRes.json();
+            eoItems = eoData.items || [];
+          }
+        } catch {
+          console.warn('Executive orders parse failed — feed will show bills only');
         }
 
-        // Merge: interleave EOs with bills, sorted by date descending
+        const impactOrd = { 'High Impact': 0, 'Moderate Impact': 1, 'Low Impact': 2 };
+        // Merge and pre-sort by impact so filteredItems never re-sorts and causes scroll jumps
         const allFederal = [...(feedData.items || []), ...eoItems].sort(
-          (a, b) => new Date(b.date || 0) - new Date(a.date || 0)
+          (a, b) => (impactOrd[a.impactLevel] ?? 3) - (impactOrd[b.impactLevel] ?? 3)
         );
 
         setFeedItems(allFederal);
@@ -121,9 +124,15 @@ export default function Home() {
       });
       const data = await response.json();
       if (!response.ok) return;
+      // Pre-sort new bills by impact before appending so they land below the viewport,
+      // not scattered above existing items (same fix as state feed loadMore)
+      const impactOrd = { 'High Impact': 0, 'Moderate Impact': 1, 'Low Impact': 2 };
+      const newSorted = (data.items || []).sort(
+        (a, b) => (impactOrd[a.impactLevel] ?? 3) - (impactOrd[b.impactLevel] ?? 3)
+      );
       // Capture scroll RIGHT before React batches the new items into the DOM
       scrollAnchorY.current = window.scrollY;
-      setFeedItems(prev => [...prev, ...(data.items || [])]);
+      setFeedItems(prev => [...prev, ...newSorted]);
       setHasMore(data.hasMore || false);
       setNextOffset(data.nextOffset || 0);
     } catch (err) {
@@ -280,15 +289,16 @@ export default function Home() {
       items = feedItems.filter(item => item.level === 'Federal');
     } else if (activeTab === 'State & Local') {
       // State items are pre-sorted at load time — DO NOT re-sort here
-      // Re-sorting the full array on each render causes items to jump above the viewport
       return stateFeedItems;
     } else {
       items = [...feedItems, ...stateFeedItems];
     }
+    // Only re-sort when user explicitly chooses 'recent' — impact view is
+    // pre-sorted at storage time so re-sorting here would cause scroll jumps
     if (sortBy === 'recent') {
-      return items.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+      return [...items].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
     }
-    return items.sort((a, b) => (impactOrder[a.impactLevel] ?? 3) - (impactOrder[b.impactLevel] ?? 3));
+    return items; // Already impact-sorted at storage time
   })();
 
   return (
