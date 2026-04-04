@@ -123,7 +123,10 @@ export default function Home() {
         body: JSON.stringify({ lifeTags: profile?.lifeTags || [], interests: profile?.interests || [], offset: nextOffset }),
       });
       const data = await response.json();
-      if (!response.ok) return;
+      if (!response.ok) {
+        console.error('loadMore API error:', data.error || response.status);
+        throw new Error(data.error || `Feed API returned ${response.status}`);
+      }
       // Pre-sort new bills by impact before appending so they land below the viewport,
       // not scattered above existing items (same fix as state feed loadMore)
       const impactOrd = { 'High Impact': 0, 'Moderate Impact': 1, 'Low Impact': 2 };
@@ -136,7 +139,7 @@ export default function Home() {
       setHasMore(data.hasMore || false);
       setNextOffset(data.nextOffset || 0);
     } catch (err) {
-      console.warn('Failed to load more:', err);
+      console.warn('Failed to load more:', err.message);
     } finally {
       setIsLoadingMore(false);
       isLoadingMoreRef.current = false;

@@ -3,6 +3,8 @@ import OpenAI from 'openai';
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
+export const maxDuration = 60; // Allow up to 60s for OpenAI processing of uncached bills
+
 // --- Firebase init (server-side, reuse existing app) ---
 const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
