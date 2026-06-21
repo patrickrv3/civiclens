@@ -29,7 +29,6 @@
     align-items: center;
     gap: var(--cl-space-3);
     padding: var(--cl-space-5) var(--cl-space-5);
-    padding-top: calc(var(--cl-space-5) + env(safe-area-inset-top, 20px));
     border-bottom: 1px solid var(--cl-gray-100);
     min-height: var(--cl-topbar-height);
 }
@@ -517,6 +516,7 @@
         left: 0;
         top: 0;
         transform: translateX(-100%);
+        padding-top: env(safe-area-inset-top, 44px);
     }
 
     .sidebar.open {
