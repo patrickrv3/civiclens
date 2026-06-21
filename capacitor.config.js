@@ -8,6 +8,14 @@ const config = {
     // This means UI updates deploy instantly to the app without new App Store builds.
     url: 'https://www.civisly.com',
     cleartext: false, // HTTPS only
+    // Allow Firebase auth and Google sign-in to stay in the WebView
+    allowNavigation: [
+      'civiclens-8b866.firebaseapp.com',
+      '*.firebaseapp.com',
+      'accounts.google.com',
+      '*.google.com',
+      '*.googleapis.com',
+    ],
   },
   plugins: {
     SplashScreen: {
