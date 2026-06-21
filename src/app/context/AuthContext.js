@@ -55,7 +55,10 @@ export function AuthProvider({ children }) {
 
     const signInWithGoogle = async () => {
         const provider = new GoogleAuthProvider();
-        // Back to popup now that authDomain is correctly configured
+        // iOS WebViews block popups — use redirect flow in native apps
+        if (typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) {
+            return signInWithRedirect(auth, provider);
+        }
         return signInWithPopup(auth, provider);
     };
 
