@@ -33,6 +33,12 @@
     min-height: var(--cl-topbar-height);
 }
 
+@media (max-width: 768px) {
+    .sidebarHeader {
+        padding-top: 60px;
+    }
+}
+
 .logoMark {
     width: 32px;
     height: 32px;
@@ -514,9 +520,11 @@
     .sidebar {
         position: fixed;
         left: 0;
-        top: 59px;
-        height: calc(100vh - 59px);
+        top: 0;
+        height: 100vh;
         transform: translateX(-100%);
+        overflow-y: auto;
+        overflow-x: hidden;
     }
 
     .sidebar.open {
