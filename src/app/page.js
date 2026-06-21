@@ -60,6 +60,7 @@ export default function Home() {
           lifeTags: profile?.lifeTags || [],
           interests: profile?.interests || [],
           offset: 0,
+          sortBy, // tell the API which mode so it uses correct batch size + ordering
         };
 
         // Fetch bills and executive orders in parallel — EO fetch is fully isolated
@@ -122,7 +123,12 @@ export default function Home() {
       const response = await fetch(`${getApiBase()}/api/feed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lifeTags: profile?.lifeTags || [], interests: profile?.interests || [], offset: nextOffset }),
+        body: JSON.stringify({
+          lifeTags: profile?.lifeTags || [],
+          interests: profile?.interests || [],
+          offset: nextOffset,
+          sortBy, // pass current filter so server uses correct batch size + ordering
+        }),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -141,7 +147,7 @@ export default function Home() {
       setIsLoadingMore(false);
       isLoadingMoreRef.current = false;
     }
-  }, [hasMore, nextOffset, profile?.lifeTags, profile?.interests]);
+  }, [hasMore, nextOffset, profile?.lifeTags, profile?.interests, sortBy]);
 
   // Immediately after new items paint, restore scroll so viewport doesn't shift
   useLayoutEffect(() => {

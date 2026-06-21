@@ -27,7 +27,11 @@ For each bill, provide:
 - shortTitle: A very short, punchy title for the bill (Max 5-8 words) that is easy for a normal person to read.
 - originalTitle: The exact original title provided in the raw text.
 - generalSummary: A simple, plain-English summary of what the bill does. Maximum 2 sentences.
-- impactLevel: One of "High Impact", "Moderate Impact", or "Low Impact".
+- impactLevel: One of "High Impact", "Moderate Impact", or "Low Impact". Use these strict criteria:
+  * "High Impact": Bills that broadly affect Americans' daily lives — taxes, healthcare, immigration, housing, education, environment, national security, federal spending (appropriations), gun policy, social programs, voting rights, or any bill that has PASSED at least one chamber of Congress.
+  * "Moderate Impact": Bills affecting specific industries, regions, or groups — regulatory changes, agency funding, infrastructure for specific areas, amendments to existing programs.
+  * "Low Impact": Purely symbolic bills — naming post offices/buildings, commemorative coins, honorary designations, awareness days/months, minor technical corrections with no policy change.
+  IMPORTANT: Err toward "High Impact" for any bill dealing with federal money, rights, or services that affect millions of people.
 - status: Based on the latestAction, classify as one of: "Introduced", "In Committee", "Passed House", "Passed Senate", "Passed Both Chambers", "Signed into Law", or "Failed". Use your best judgment based on the action text.
 - latestAction: Pass through the latestAction text exactly as provided.
 - tagImpacts: A JSON object where keys are the specific Life Tags provided, and values are a 1-sentence explanation of why this bill matters to someone with that tag. Only include tags that actually have a relevant impact.
@@ -66,8 +70,9 @@ async function cacheSummary(billId, summaryData) {
 
 export async function POST(request) {
     try {
-        const { lifeTags, interests, offset } = await request.json();
+        const { lifeTags, interests, offset, sortBy } = await request.json();
         const pageOffset = offset || 0;
+        const sortMode = sortBy || 'impact'; // 'impact' | 'recent'
 
         // 1. Check for API keys
         if (!process.env.OPENAI_API_KEY || !process.env.CONGRESS_API_KEY) {
@@ -77,9 +82,11 @@ export async function POST(request) {
             );
         }
 
-        // 2. Fetch Latest Bills from Congress.gov, sorted by most recently updated
-        // sort=updateDate ensures high-profile bills with recent Senate/House votes surface first
-        const batchSize = 20;
+        // 2. Fetch bills from Congress.gov sorted by most recently updated.
+        // For impact mode we fetch a larger pool (40) so there are enough bills
+        // to find genuinely High Impact ones among recent activity.
+        // For recent mode we fetch 20 — speed matters more than breadth.
+        const batchSize = sortMode === 'impact' ? 40 : 20;
         const congressUrl = "https://api.congress.gov/v3/bill?api_key=" + process.env.CONGRESS_API_KEY +
             "&limit=" + batchSize +
             "&offset=" + pageOffset +
@@ -95,8 +102,7 @@ export async function POST(request) {
         const data = await congressRes.json();
         const bills = data.bills || [];
 
-        // Bills are already sorted by updateDate desc from the API — no client-side re-sort needed
-
+        // Bills arrive sorted by updateDate desc from the API
 
         // Map Congress API bill types to their Congress.gov URL slug
         const typeSlugMap = {
@@ -186,21 +192,28 @@ export async function POST(request) {
             });
         }
 
-        // 6. Merge cached + fresh items, preserving Congress.gov order
+        // 6. Merge cached + fresh items
         const allItemsById = new Map();
         [...cachedItems, ...aiItems].forEach(item => {
             if (item.id) allItemsById.set(item.id, item);
         });
-        const orderedItems = billsForProcessing
+        let orderedItems = billsForProcessing
             .map(b => allItemsById.get(b.id))
             .filter(Boolean);
 
+        // 7. Server-side sort so the client always receives items in the right order.
+        // Impact mode: High Impact first so the first cards the user sees are meaningful.
+        // Recent mode: preserve the updateDate desc order from Congress.gov.
+        if (sortMode === 'impact') {
+            const impactRank = { 'High Impact': 0, 'Moderate Impact': 1, 'Low Impact': 2 };
+            orderedItems.sort((a, b) => (impactRank[a.impactLevel] ?? 3) - (impactRank[b.impactLevel] ?? 3));
+        }
+        // 'recent' order is already correct — no sort needed
+
         const pagination = data.pagination || {};
-        // pagination.count = items in THIS page (e.g. 10), NOT the total.
-        // pagination.next = URL for the next page — only present if more pages exist.
         const hasMore = !!pagination.next;
 
-        console.log(`Feed: ${cachedItems.length} from cache, ${aiItems.length} from OpenAI, hasMore=${hasMore}`);
+        console.log(`Feed [${sortMode}]: ${cachedItems.length} cached, ${aiItems.length} from AI, hasMore=${hasMore}`);
 
         return NextResponse.json({ items: orderedItems, hasMore, nextOffset: pageOffset + batchSize });
 
