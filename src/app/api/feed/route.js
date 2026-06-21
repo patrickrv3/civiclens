@@ -77,9 +77,15 @@ export async function POST(request) {
             );
         }
 
-        // 2. Fetch Latest Bills from Congress.gov
-        const batchSize = 10;
-        const congressUrl = "https://api.congress.gov/v3/bill?api_key=" + process.env.CONGRESS_API_KEY + "&limit=" + batchSize + "&offset=" + pageOffset + "&format=json";
+        // 2. Fetch Latest Bills from Congress.gov, sorted by most recently updated
+        // sort=updateDate ensures high-profile bills with recent Senate/House votes surface first
+        const batchSize = 20;
+        const congressUrl = "https://api.congress.gov/v3/bill?api_key=" + process.env.CONGRESS_API_KEY +
+            "&limit=" + batchSize +
+            "&offset=" + pageOffset +
+            "&sort=updateDate" +
+            "&sort_direction=desc" +
+            "&format=json";
         const congressRes = await fetch(congressUrl);
 
         if (!congressRes.ok) {
@@ -89,8 +95,8 @@ export async function POST(request) {
         const data = await congressRes.json();
         const bills = data.bills || [];
 
-        // Sort the bills by date from newest to oldest
-        bills.sort((a, b) => new Date(b.updateDate) - new Date(a.updateDate));
+        // Bills are already sorted by updateDate desc from the API — no client-side re-sort needed
+
 
         // Map Congress API bill types to their Congress.gov URL slug
         const typeSlugMap = {

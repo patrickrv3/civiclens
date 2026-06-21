@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { db } from '../lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { getApiBase } from '../lib/apiUrl';
 
 const SubscriptionContext = createContext({ isPro: false, subscription: null, loading: true });
 
@@ -45,7 +46,7 @@ export function SubscriptionProvider({ children }) {
     const startCheckout = async () => {
         if (!user) return;
         try {
-            const res = await fetch('/api/stripe-checkout', {
+            const res = await fetch(`${getApiBase()}/api/stripe-checkout`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ uid: user.uid, email: user.email }),
@@ -60,7 +61,7 @@ export function SubscriptionProvider({ children }) {
     const openPortal = async () => {
         if (!subscription?.stripeCustomerId) return;
         try {
-            const res = await fetch('/api/stripe-portal', {
+            const res = await fetch(`${getApiBase()}/api/stripe-portal`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ customerId: subscription.stripeCustomerId }),

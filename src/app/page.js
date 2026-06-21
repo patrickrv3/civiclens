@@ -8,6 +8,7 @@ import { useAuth } from './context/AuthContext';
 import { useSubscription } from './context/SubscriptionContext';
 import FeedCard from './components/FeedCard';
 import UpgradeModal from './components/UpgradeModal';
+import { getApiBase } from './lib/apiUrl';
 
 /* Inline icons for the dashboard */
 const CalendarIcon = () => (
@@ -62,13 +63,14 @@ export default function Home() {
         };
 
         // Fetch bills and executive orders in parallel — EO fetch is fully isolated
+        const base = getApiBase();
         const [feedRes, eoRes] = await Promise.all([
-          fetch('/api/feed', {
+          fetch(`${base}/api/feed`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           }),
-          fetch('/api/executive-orders', {
+          fetch(`${base}/api/executive-orders`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -117,7 +119,7 @@ export default function Home() {
     isLoadingMoreRef.current = true;
     setIsLoadingMore(true);
     try {
-      const response = await fetch('/api/feed', {
+      const response = await fetch(`${getApiBase()}/api/feed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lifeTags: profile?.lifeTags || [], interests: profile?.interests || [], offset: nextOffset }),
@@ -127,15 +129,10 @@ export default function Home() {
         console.error('loadMore API error:', data.error || response.status);
         throw new Error(data.error || `Feed API returned ${response.status}`);
       }
-      // Pre-sort new bills by impact before appending so they land below the viewport,
-      // not scattered above existing items (same fix as state feed loadMore)
-      const impactOrd = { 'High Impact': 0, 'Moderate Impact': 1, 'Low Impact': 2 };
-      const newSorted = (data.items || []).sort(
-        (a, b) => (impactOrd[a.impactLevel] ?? 3) - (impactOrd[b.impactLevel] ?? 3)
-      );
       // Capture scroll RIGHT before React batches the new items into the DOM
       scrollAnchorY.current = window.scrollY;
-      setFeedItems(prev => [...prev, ...newSorted]);
+      // Append raw — filteredItems handles global sort so ordering is always correct
+      setFeedItems(prev => [...prev, ...(data.items || [])]);
       setHasMore(data.hasMore || false);
       setNextOffset(data.nextOffset || 0);
     } catch (err) {
@@ -152,8 +149,8 @@ export default function Home() {
       window.scrollTo({ top: scrollAnchorY.current, behavior: 'instant' });
       scrollAnchorY.current = null;
     }
-  // Fires for both federal and state feed appends
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Fires for both federal and state feed appends
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [feedItems.length, stateFeedItems.length]);
 
   // Load more state bills — declared BEFORE IntersectionObserver to avoid TDZ
@@ -163,7 +160,7 @@ export default function Home() {
     isLoadingMoreStateRef.current = true;
     setIsLoadingMoreState(true);
     try {
-      const response = await fetch('/api/state-feed', {
+      const response = await fetch(`${getApiBase()}/api/state-feed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ zipCode: profile.location.zipCode, page: stateNextPage, perPage: 15 }),
@@ -171,12 +168,8 @@ export default function Home() {
       const data = await response.json();
       if (!response.ok) return;
       scrollAnchorY.current = window.scrollY;
-      // Pre-sort this batch so new items don't reposition above the viewport
-      const newSorted = (data.items || []).sort((a, b) => {
-        const order = { 'High Impact': 0, 'Moderate Impact': 1, 'Low Impact': 2 };
-        return (order[a.impactLevel] ?? 3) - (order[b.impactLevel] ?? 3);
-      });
-      setStateFeedItems(prev => [...prev, ...newSorted]);
+      // Append raw — filteredItems handles global sort so ordering is always correct
+      setStateFeedItems(prev => [...prev, ...(data.items || [])]);
       setStateHasMore(data.hasMore || false);
       setStateNextPage(p => p + 1);
     } catch (err) {
@@ -220,7 +213,7 @@ export default function Home() {
     async function rePersonalize() {
       setIsPersonalizing(true);
       try {
-        const response = await fetch('/api/personalize', {
+        const response = await fetch(`${getApiBase()}/api/personalize`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -255,7 +248,7 @@ export default function Home() {
     async function fetchStateFeed() {
       setIsLoadingState(true);
       try {
-        const response = await fetch('/api/state-feed', {
+        const response = await fetch(`${getApiBase()}/api/state-feed`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ zipCode: profile.location.zipCode, page: 1, perPage: 15 }),
@@ -291,17 +284,17 @@ export default function Home() {
     if (activeTab === 'Federal') {
       items = feedItems.filter(item => item.level === 'Federal');
     } else if (activeTab === 'State & Local') {
-      // State items are pre-sorted at load time — DO NOT re-sort here
-      return stateFeedItems;
+      items = [...stateFeedItems];
     } else {
       items = [...feedItems, ...stateFeedItems];
     }
-    // Only re-sort when user explicitly chooses 'recent' — impact view is
-    // pre-sorted at storage time so re-sorting here would cause scroll jumps
+    // Always sort the full combined list so new batches land in the correct position
     if (sortBy === 'recent') {
-      return [...items].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+      return items.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
     }
-    return items; // Already impact-sorted at storage time
+    // High Impact filter: globally sort entire list — prevents new-batch High Impact
+    // items from appearing below Moderate/Low items from earlier batches
+    return items.sort((a, b) => (impactOrder[a.impactLevel] ?? 3) - (impactOrder[b.impactLevel] ?? 3));
   })();
 
   return (

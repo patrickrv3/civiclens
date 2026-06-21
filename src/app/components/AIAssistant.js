@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import styles from './AIAssistant.module.css';
 import { useProfile } from '../context/ProfileContext';
+import { getApiBase } from '../lib/apiUrl';
 
 const SendIcon = () => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -94,7 +95,7 @@ export default function AIAssistant({ initialQuestion, onQuestionConsumed }) {
         setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
 
         try {
-            const response = await fetch('/api/chat', {
+            const response = await fetch(`${getApiBase()}/api/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
