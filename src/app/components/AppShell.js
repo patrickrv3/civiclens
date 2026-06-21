@@ -132,6 +132,18 @@ export default function AppShell({ children }) {
         };
     }, []);
 
+    // Fix iOS WebView viewport shift when keyboard dismisses
+    useEffect(() => {
+        const handleFocusOut = () => {
+            // Small delay to let iOS finish keyboard animation
+            setTimeout(() => {
+                window.scrollTo(0, 0);
+            }, 100);
+        };
+        document.addEventListener('focusout', handleFocusOut);
+        return () => document.removeEventListener('focusout', handleFocusOut);
+    }, []);
+
     const locationText = getPrimaryLocation() || 'Add your location →';
     const profileName = profile.hasCompletedOnboarding ? 'Your Profile' : 'Set up profile';
 
