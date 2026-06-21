@@ -200,7 +200,7 @@
 
 /* --- Top Bar --- */
 .topBar {
-    height: var(--cl-topbar-height);
+    min-height: var(--cl-topbar-height);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -211,6 +211,7 @@
     flex-shrink: 0;
     z-index: var(--cl-z-topbar);
     gap: var(--cl-space-4);
+    box-sizing: border-box;
 }
 
 .topBarLeft {
@@ -533,6 +534,7 @@
 
     .topBar {
         padding: 0 var(--cl-space-4);
+        padding-top: env(safe-area-inset-top, 0px);
     }
 
     .searchBar {
