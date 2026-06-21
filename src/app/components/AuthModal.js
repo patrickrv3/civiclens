@@ -109,12 +109,16 @@ export default function AuthModal({ onClose, onSignUp }) {
                     </div>
 
                     <div className={styles.body}>
-                        <button className={styles.googleBtn} onClick={handleGoogle} type="button">
-                            <GoogleIcon />
-                            Continue with Google
-                        </button>
-
-                        <div className={styles.divider}>or</div>
+                        {/* Google blocks OAuth in iOS WebViews — only show on web */}
+                        {!(typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) && (
+                            <>
+                                <button className={styles.googleBtn} onClick={handleGoogle} type="button">
+                                    <GoogleIcon />
+                                    Continue with Google
+                                </button>
+                                <div className={styles.divider}>or</div>
+                            </>
+                        )}
 
                         <form className={styles.form} onSubmit={handleSubmit}>
                             <div className={styles.field}>
