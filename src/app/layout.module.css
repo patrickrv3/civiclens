@@ -514,9 +514,9 @@
     .sidebar {
         position: fixed;
         left: 0;
-        top: 0;
+        top: 59px;
+        height: calc(100vh - 59px);
         transform: translateX(-100%);
-        padding-top: 59px;
     }
 
     .sidebar.open {
