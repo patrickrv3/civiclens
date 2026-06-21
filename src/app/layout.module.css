@@ -21,6 +21,7 @@
     transition: width var(--cl-transition-slow), transform var(--cl-transition-slow);
     z-index: var(--cl-z-sidebar);
     overflow: hidden;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .sidebarHeader {
@@ -143,6 +144,7 @@
 /* --- Sidebar Footer --- */
 .sidebarFooter {
     padding: var(--cl-space-4);
+    padding-bottom: calc(var(--cl-space-4) + env(safe-area-inset-bottom, 20px));
     border-top: 1px solid var(--cl-gray-100);
 }
 
