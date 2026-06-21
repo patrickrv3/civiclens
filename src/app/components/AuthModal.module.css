@@ -167,7 +167,7 @@
     padding: 10px 14px;
     border-radius: 10px;
     border: 1px solid var(--cl-gray-200);
-    font-size: 0.88rem;
+    font-size: 16px; /* Must be >= 16px to prevent iOS auto-zoom */
     color: var(--cl-gray-900);
     outline: none;
     transition: border-color 0.2s ease;
