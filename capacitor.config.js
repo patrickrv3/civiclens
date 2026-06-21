@@ -2,14 +2,18 @@
 const config = {
   appId: 'com.civisly.app',
   appName: 'Civisly',
-  webDir: 'out', // Next.js static export directory
+  webDir: 'out', // Fallback local dir (not used when server.url is set)
+  server: {
+    // Load the live Vercel site in the native WebView.
+    // This means UI updates deploy instantly to the app without new App Store builds.
+    url: 'https://civisly.com',
+    cleartext: false, // HTTPS only
+  },
   plugins: {
     SplashScreen: {
       launchShowDuration: 2000,
       backgroundColor: '#6366f1',
       showSpinner: false,
-      androidSplashResourceName: 'splash',
-      iosSplashResourceName: 'Default',
     },
     StatusBar: {
       style: 'Light',
