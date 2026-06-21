@@ -11,6 +11,12 @@ const firebaseConfig = {
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+// In Capacitor native, use the custom domain as authDomain so
+// the OAuth redirect stays inside the WebView instead of opening Safari.
+if (typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) {
+    firebaseConfig.authDomain = 'www.civisly.com';
+}
+
 // Initialize Firebase only once
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
