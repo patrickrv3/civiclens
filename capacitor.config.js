@@ -6,7 +6,7 @@ const config = {
   server: {
     // Load the live Vercel site in the native WebView.
     // This means UI updates deploy instantly to the app without new App Store builds.
-    url: 'https://civisly.com',
+    url: 'https://www.civisly.com',
     cleartext: false, // HTTPS only
   },
   plugins: {

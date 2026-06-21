@@ -11,7 +11,7 @@ export function getApiBase() {
     typeof window !== 'undefined' &&
     window.Capacitor?.isNativePlatform?.()
   ) {
-    return 'https://civisly.com';
+    return 'https://www.civisly.com';
   }
   return ''; // Relative URLs work fine in the browser
 }
