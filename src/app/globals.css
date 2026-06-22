@@ -142,7 +142,6 @@ body {
   line-height: var(--cl-line-height-normal);
   color: var(--cl-gray-800);
   background-color: var(--cl-gray-50);
-  overflow: hidden;
 }
 
 a {
