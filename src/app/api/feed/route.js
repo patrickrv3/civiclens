@@ -90,8 +90,7 @@ export async function POST(request) {
         const congressUrl = "https://api.congress.gov/v3/bill/119?api_key=" + process.env.CONGRESS_API_KEY +
             "&limit=" + batchSize +
             "&offset=" + pageOffset +
-            "&sort=updateDate" +
-            "&sort_direction=desc" +
+            "&sort=updateDate+desc" +
             "&format=json";
         const congressRes = await fetch(congressUrl);
 
