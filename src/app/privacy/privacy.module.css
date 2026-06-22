@@ -1,0 +1,126 @@
+.container {
+    min-height: 100vh;
+    background: #f8fafc;
+    padding: 40px 20px 80px;
+}
+
+.content {
+    max-width: 720px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 16px;
+    padding: 48px 40px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+}
+
+.title {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #1e1b4b;
+    margin-bottom: 4px;
+}
+
+.updated {
+    font-size: 0.88rem;
+    color: #9ca3af;
+    margin-bottom: 36px;
+}
+
+.section {
+    margin-bottom: 32px;
+}
+
+.section h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1e1b4b;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #eef2ff;
+}
+
+.section h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #374151;
+    margin-top: 18px;
+    margin-bottom: 8px;
+}
+
+.section p {
+    font-size: 0.95rem;
+    color: #4b5563;
+    line-height: 1.7;
+    margin-bottom: 12px;
+}
+
+.section ul {
+    padding-left: 20px;
+    margin-bottom: 12px;
+}
+
+.section li {
+    font-size: 0.95rem;
+    color: #4b5563;
+    line-height: 1.7;
+    margin-bottom: 8px;
+}
+
+.section li strong {
+    color: #1f2937;
+}
+
+.section a {
+    color: #6366f1;
+    text-decoration: underline;
+}
+
+.section a:hover {
+    color: #4f46e5;
+}
+
+.contactEmail {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.contactEmail a {
+    color: #6366f1;
+    text-decoration: none;
+}
+
+.contactEmail a:hover {
+    text-decoration: underline;
+}
+
+.backLink {
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.backLink a {
+    color: #6366f1;
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-decoration: none;
+}
+
+.backLink a:hover {
+    text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+    .container {
+        padding: 20px 12px 60px;
+    }
+
+    .content {
+        padding: 32px 24px;
+        border-radius: 12px;
+    }
+
+    .title {
+        font-size: 1.6rem;
+    }
+}
