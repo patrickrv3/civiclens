@@ -83,12 +83,9 @@ export async function POST(request) {
         }
 
         // 2. Fetch bills from Congress.gov sorted by most recently updated.
-        // For impact mode we fetch a larger pool (40) so there are enough bills
-        // to find genuinely High Impact ones among recent activity.
-        // For recent mode we fetch 20 — speed matters more than breadth.
-        // Fetch more bills from API so we have enough after filtering by actual action date
+        // Fetch a larger pool so we have enough after filtering to current congress
         const fetchSize = 50;
-        // Only fetch bills updated in the last 90 days (API-level filter on updateDate)
+        // Only fetch bills updated in the last 90 days (API-level pre-filter)
         const fromDate = new Date();
         fromDate.setDate(fromDate.getDate() - 90);
         const fromDateTime = fromDate.toISOString().split('.')[0] + 'Z';
@@ -108,17 +105,12 @@ export async function POST(request) {
         }
 
         const data = await congressRes.json();
-        // Filter to only bills with actual legislative action in the last 90 days
-        const cutoffDate = fromDate.toISOString().split('T')[0]; // YYYY-MM-DD
-        const recentBills = (data.bills || []).filter(b => {
-            const actionDate = b.latestAction?.actionDate;
-            return actionDate && actionDate >= cutoffDate;
-        });
-        // Limit how many we process to stay within Vercel's 60s timeout
-        const processLimit = sortMode === 'impact' ? 15 : 10;
-        const bills = recentBills.slice(0, processLimit);
+        // Keep only current congress (119th, 2025-2027) and limit to 15 for processing
+        const bills = (data.bills || [])
+            .filter(b => b.congress >= 119)
+            .slice(0, 15);
 
-        // Bills filtered to recent activity only
+        // Bills filtered to current congress only
 
         // Map Congress API bill types to their Congress.gov URL slug
         const typeSlugMap = {
