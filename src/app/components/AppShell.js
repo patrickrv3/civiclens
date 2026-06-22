@@ -133,6 +133,13 @@ export default function AppShell({ children }) {
         };
     }, []);
 
+    // Tag <html> with a class when running inside Capacitor native shell
+    useEffect(() => {
+        if (typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) {
+            document.documentElement.classList.add('capacitor-native');
+        }
+    }, []);
+
     // Fix iOS WebView viewport shift when keyboard dismisses
     useEffect(() => {
         const handleFocusOut = () => {

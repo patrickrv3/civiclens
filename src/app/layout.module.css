@@ -34,7 +34,7 @@
 }
 
 @media (max-width: 768px) {
-    .sidebarHeader {
+    :global(.capacitor-native) .sidebarHeader {
         padding-top: 60px;
     }
 }
@@ -541,6 +541,9 @@
 
     .topBar {
         padding: var(--cl-space-3) var(--cl-space-4);
+    }
+
+    :global(.capacitor-native) .topBar {
         padding-top: 59px;
     }
 
