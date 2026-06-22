@@ -237,7 +237,7 @@ export async function POST(request) {
 
         console.log(`Feed [${sortMode}]: ${cachedItems.length} cached, ${aiItems.length} from AI, hasMore=${hasMore}`);
 
-        return NextResponse.json({ items: orderedItems, hasMore, nextOffset: pageOffset + batchSize });
+        return NextResponse.json({ items: orderedItems, hasMore, nextOffset: pageOffset + fetchSize });
 
     } catch (error) {
         console.error("Error in feed API:", error);
