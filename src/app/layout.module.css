@@ -34,6 +34,10 @@
 }
 
 @media (max-width: 768px) {
+    .sidebarHeader {
+        padding-top: var(--cl-space-5);
+    }
+
     :global(.capacitor-native) .sidebarHeader {
         padding-top: 60px;
     }
@@ -521,9 +525,10 @@
         left: 0;
         top: 0;
         height: 100vh;
+        height: 100dvh;
         transform: translateX(-100%);
-        overflow-y: auto;
-        overflow-x: hidden;
+        overflow: hidden;
+        z-index: calc(var(--cl-z-topbar) + 10);
     }
 
     .sidebar.open {
@@ -533,6 +538,7 @@
 
     .overlay.visible {
         display: block;
+        z-index: calc(var(--cl-z-topbar) + 5);
     }
 
     .menuButton {
