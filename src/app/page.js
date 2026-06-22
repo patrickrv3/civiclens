@@ -245,9 +245,8 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.lifeTags]);
 
-  // Fetch state bills when "State & Local" tab is clicked (lazy load)
+  // Fetch state bills on mount (alongside federal bills) when zip code is available
   useEffect(() => {
-    if (activeTab !== 'State & Local') return;
     if (hasLoadedState.current) return;
     if (!profile?.location?.zipCode) return;
 
@@ -277,7 +276,7 @@ export default function Home() {
       }
     }
     fetchStateFeed();
-  }, [activeTab, profile?.location?.zipCode]);
+  }, [profile?.location?.zipCode]);
 
   // (loadMoreState moved above IntersectionObserver — see above)
 
