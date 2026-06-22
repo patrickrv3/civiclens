@@ -87,7 +87,7 @@ export async function POST(request) {
         // to find genuinely High Impact ones among recent activity.
         // For recent mode we fetch 20 — speed matters more than breadth.
         const batchSize = sortMode === 'impact' ? 40 : 20;
-        const congressUrl = "https://api.congress.gov/v3/bill?api_key=" + process.env.CONGRESS_API_KEY +
+        const congressUrl = "https://api.congress.gov/v3/bill/119?api_key=" + process.env.CONGRESS_API_KEY +
             "&limit=" + batchSize +
             "&offset=" + pageOffset +
             "&sort=updateDate" +
