@@ -284,6 +284,9 @@ export default function Home() {
   // Separate const so it can be referenced inside fetchStateFeed useEffect
   const stateImpactOrder = { 'High Impact': 0, 'Moderate Impact': 1, 'Low Impact': 2 };
 
+  const isNative = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
+  const canSeeState = isPro || isNative;
+
   const filteredItems = (() => {
     let items;
     if (activeTab === 'Federal') {
@@ -291,7 +294,10 @@ export default function Home() {
     } else if (activeTab === 'State & Local') {
       items = [...stateFeedItems];
     } else {
-      items = [...feedItems, ...stateFeedItems];
+      // "All Updates" — only include state bills if Pro or native
+      items = canSeeState
+        ? [...feedItems, ...stateFeedItems]
+        : [...feedItems];
     }
     // Always sort the full combined list so new batches land in the correct position
     if (sortBy === 'recent') {
@@ -375,6 +381,38 @@ export default function Home() {
             </div>
           </div>
         </header>
+
+        {/* Pro upsell banner — show on 'All Updates' for non-Pro web users */}
+        {activeTab === 'All' && !canSeeState && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '12px 16px',
+            background: 'linear-gradient(135deg, #eef2ff, #f5f3ff)',
+            border: '1px solid #c7d2fe',
+            borderRadius: '12px',
+            marginBottom: '16px',
+            fontSize: '0.88rem',
+            color: '#4338ca',
+            lineHeight: 1.45,
+          }}>
+            <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>🏛️</span>
+            <span>
+              Showing <strong>federal bills only</strong>.
+              <button
+                onClick={() => setShowUpgradeModal(true)}
+                style={{
+                  background: 'none', border: 'none', color: '#4f46e5',
+                  fontWeight: 700, cursor: 'pointer', textDecoration: 'underline',
+                  fontSize: 'inherit', padding: '0 0 0 4px',
+                }}
+              >
+                Upgrade to Pro
+              </button> to unlock State & Local legislation.
+            </span>
+          </div>
+        )}
 
         {isLoading ? (
           <div style={{ textAlign: 'center', padding: '40px 0', color: '#666' }}>
