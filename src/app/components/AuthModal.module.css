@@ -242,3 +242,70 @@
 .modalInner {
     position: relative;
 }
+
+/* Info banner for iOS Google users */
+.infoBanner {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 14px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    font-size: 13px;
+    color: #1e40af;
+    line-height: 1.45;
+    margin-bottom: 16px;
+}
+
+.infoBannerIcon {
+    flex-shrink: 0;
+    font-size: 16px;
+    line-height: 1.2;
+}
+
+/* Forgot password / back link */
+.linkBtn {
+    background: none;
+    border: none;
+    color: var(--cl-primary-500);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 8px 0;
+    text-align: center;
+    transition: color 0.2s ease;
+}
+
+.linkBtn:hover {
+    color: var(--cl-primary-700);
+}
+
+/* Reset password success */
+.resetSuccess {
+    text-align: center;
+    padding: 12px 0;
+}
+
+.resetSuccess svg {
+    color: var(--cl-primary-500);
+    margin-bottom: 12px;
+}
+
+.resetSuccess h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--cl-gray-900);
+}
+
+.resetSuccess p {
+    font-size: 14px;
+    color: var(--cl-gray-500);
+    line-height: 1.5;
+    margin-bottom: 20px;
+}
+
+.resetSuccess strong {
+    color: var(--cl-gray-700);
+}

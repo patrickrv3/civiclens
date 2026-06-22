@@ -3,6 +3,11 @@
 import { useState } from 'react';
 import styles from './AuthModal.module.css';
 import { useAuth } from '../context/AuthContext';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { auth } from '../lib/firebase';
+
+const isNative = () =>
+    typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
 
 const GoogleIcon = () => (
     <svg viewBox="0 0 24 24">
@@ -19,13 +24,20 @@ const CloseIcon = () => (
     </svg>
 );
 
+const MailIcon = () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 20, height: 20 }}>
+        <rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+    </svg>
+);
+
 export default function AuthModal({ onClose, onSignUp }) {
     const { signUp, signIn, signInWithGoogle } = useAuth();
-    const [mode, setMode] = useState('signin'); // 'signin' | 'signup'
+    const [mode, setMode] = useState('signin'); // 'signin' | 'signup' | 'reset'
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [resetSent, setResetSent] = useState(false);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -46,13 +58,39 @@ export default function AuthModal({ onClose, onSignUp }) {
             if (code === 'auth/email-already-in-use') {
                 setError('An account with this email already exists.');
             } else if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
-                setError('Invalid email or password.');
+                if (isNative()) {
+                    setError('Invalid email or password. If you signed up with Google on the web, tap "Forgot Password?" below to set a password.');
+                } else {
+                    setError('Invalid email or password.');
+                }
             } else if (code === 'auth/weak-password') {
                 setError('Password must be at least 6 characters.');
             } else if (code === 'auth/invalid-email') {
                 setError('Please enter a valid email address.');
             } else {
                 setError(err.message || 'Something went wrong. Please try again.');
+            }
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleResetPassword = async (e) => {
+        e.preventDefault();
+        setError('');
+        setIsLoading(true);
+
+        try {
+            await sendPasswordResetEmail(auth, email);
+            setResetSent(true);
+        } catch (err) {
+            const code = err.code || '';
+            if (code === 'auth/user-not-found') {
+                setError('No account found with this email.');
+            } else if (code === 'auth/invalid-email') {
+                setError('Please enter a valid email address.');
+            } else {
+                setError('Something went wrong. Please try again.');
             }
         } finally {
             setIsLoading(false);
@@ -76,6 +114,18 @@ export default function AuthModal({ onClose, onSignUp }) {
         }
     };
 
+    const switchToReset = () => {
+        setMode('reset');
+        setError('');
+        setResetSent(false);
+    };
+
+    const switchToSignIn = () => {
+        setMode('signin');
+        setError('');
+        setResetSent(false);
+    };
+
     return (
         <div className={styles.overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
             <div className={styles.modal}>
@@ -89,28 +139,43 @@ export default function AuthModal({ onClose, onSignUp }) {
                             Civis<span className={styles.logoAccent}>ly</span>
                         </div>
                         <p className={styles.headerSubtitle}>
-                            {mode === 'signin' ? 'Welcome back! Sign in to sync your data.' : 'Create an account to save your progress.'}
+                            {mode === 'reset'
+                                ? 'Reset your password or set one for the first time.'
+                                : mode === 'signin'
+                                    ? 'Welcome back! Sign in to sync your data.'
+                                    : 'Create an account to save your progress.'}
                         </p>
                     </div>
 
-                    <div className={styles.tabs}>
-                        <button
-                            className={`${styles.tab} ${mode === 'signin' ? styles.tabActive : ''}`}
-                            onClick={() => { setMode('signin'); setError(''); }}
-                        >
-                            Sign In
-                        </button>
-                        <button
-                            className={`${styles.tab} ${mode === 'signup' ? styles.tabActive : ''}`}
-                            onClick={() => { setMode('signup'); setError(''); }}
-                        >
-                            Sign Up
-                        </button>
-                    </div>
+                    {/* Tabs — hide in reset mode */}
+                    {mode !== 'reset' && (
+                        <div className={styles.tabs}>
+                            <button
+                                className={`${styles.tab} ${mode === 'signin' ? styles.tabActive : ''}`}
+                                onClick={() => { setMode('signin'); setError(''); }}
+                            >
+                                Sign In
+                            </button>
+                            <button
+                                className={`${styles.tab} ${mode === 'signup' ? styles.tabActive : ''}`}
+                                onClick={() => { setMode('signup'); setError(''); }}
+                            >
+                                Sign Up
+                            </button>
+                        </div>
+                    )}
 
                     <div className={styles.body}>
-                        {/* Google blocks OAuth in iOS WebViews — only show on web */}
-                        {!(typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) && (
+                        {/* iOS-only banner for Google users */}
+                        {isNative() && mode === 'signin' && (
+                            <div className={styles.infoBanner}>
+                                <span className={styles.infoBannerIcon}>ℹ️</span>
+                                <span>Signed up with Google on civisly.com? Tap <strong>Forgot Password</strong> below to set a password for this app.</span>
+                            </div>
+                        )}
+
+                        {/* Google button — only show on web */}
+                        {!isNative() && mode !== 'reset' && (
                             <>
                                 <button className={styles.googleBtn} onClick={handleGoogle} type="button">
                                     <GoogleIcon />
@@ -120,37 +185,82 @@ export default function AuthModal({ onClose, onSignUp }) {
                             </>
                         )}
 
-                        <form className={styles.form} onSubmit={handleSubmit}>
-                            <div className={styles.field}>
-                                <label className={styles.label}>Email</label>
-                                <input
-                                    className={styles.input}
-                                    type="email"
-                                    placeholder="you@example.com"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    required
-                                />
-                            </div>
-                            <div className={styles.field}>
-                                <label className={styles.label}>Password</label>
-                                <input
-                                    className={styles.input}
-                                    type="password"
-                                    placeholder="••••••••"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    required
-                                    minLength={6}
-                                />
-                            </div>
+                        {/* Reset Password Form */}
+                        {mode === 'reset' ? (
+                            resetSent ? (
+                                <div className={styles.resetSuccess}>
+                                    <MailIcon />
+                                    <h3>Check your email</h3>
+                                    <p>We sent a password reset link to <strong>{email}</strong>. Click the link to set your password, then come back and sign in.</p>
+                                    <button className={styles.submitBtn} type="button" onClick={switchToSignIn}>
+                                        ← Back to Sign In
+                                    </button>
+                                </div>
+                            ) : (
+                                <form className={styles.form} onSubmit={handleResetPassword}>
+                                    <div className={styles.field}>
+                                        <label className={styles.label}>Email</label>
+                                        <input
+                                            className={styles.input}
+                                            type="email"
+                                            placeholder="you@example.com"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            required
+                                        />
+                                    </div>
 
-                            {error && <div className={styles.error}>{error}</div>}
+                                    {error && <div className={styles.error}>{error}</div>}
 
-                            <button className={styles.submitBtn} type="submit" disabled={isLoading}>
-                                {isLoading ? 'Loading...' : mode === 'signin' ? 'Sign In' : 'Create Account'}
-                            </button>
-                        </form>
+                                    <button className={styles.submitBtn} type="submit" disabled={isLoading}>
+                                        {isLoading ? 'Sending...' : 'Send Reset Link'}
+                                    </button>
+
+                                    <button className={styles.linkBtn} type="button" onClick={switchToSignIn}>
+                                        ← Back to Sign In
+                                    </button>
+                                </form>
+                            )
+                        ) : (
+                            /* Sign In / Sign Up Form */
+                            <form className={styles.form} onSubmit={handleSubmit}>
+                                <div className={styles.field}>
+                                    <label className={styles.label}>Email</label>
+                                    <input
+                                        className={styles.input}
+                                        type="email"
+                                        placeholder="you@example.com"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                                <div className={styles.field}>
+                                    <label className={styles.label}>Password</label>
+                                    <input
+                                        className={styles.input}
+                                        type="password"
+                                        placeholder="••••••••"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        required
+                                        minLength={6}
+                                    />
+                                </div>
+
+                                {error && <div className={styles.error}>{error}</div>}
+
+                                <button className={styles.submitBtn} type="submit" disabled={isLoading}>
+                                    {isLoading ? 'Loading...' : mode === 'signin' ? 'Sign In' : 'Create Account'}
+                                </button>
+
+                                {mode === 'signin' && (
+                                    <button className={styles.linkBtn} type="button" onClick={switchToReset}>
+                                        Forgot Password?
+                                    </button>
+                                )}
+                            </form>
+                        )}
                     </div>
                 </div>
             </div>
