@@ -86,13 +86,14 @@ export async function POST(request) {
         // For impact mode we fetch a larger pool (40) so there are enough bills
         // to find genuinely High Impact ones among recent activity.
         // For recent mode we fetch 20 — speed matters more than breadth.
-        const batchSize = sortMode === 'impact' ? 15 : 10;
-        // Only fetch bills updated in the last 90 days to avoid decades-old bills
+        // Fetch more bills from API so we have enough after filtering by actual action date
+        const fetchSize = 50;
+        // Only fetch bills updated in the last 90 days (API-level filter on updateDate)
         const fromDate = new Date();
         fromDate.setDate(fromDate.getDate() - 90);
         const fromDateTime = fromDate.toISOString().split('.')[0] + 'Z';
         const congressUrl = "https://api.congress.gov/v3/bill?api_key=" + process.env.CONGRESS_API_KEY +
-            "&limit=" + batchSize +
+            "&limit=" + fetchSize +
             "&offset=" + pageOffset +
             "&fromDateTime=" + fromDateTime +
             "&sort=updateDate" +
@@ -107,9 +108,17 @@ export async function POST(request) {
         }
 
         const data = await congressRes.json();
-        const bills = data.bills || [];
+        // Filter to only bills with actual legislative action in the last 90 days
+        const cutoffDate = fromDate.toISOString().split('T')[0]; // YYYY-MM-DD
+        const recentBills = (data.bills || []).filter(b => {
+            const actionDate = b.latestAction?.actionDate;
+            return actionDate && actionDate >= cutoffDate;
+        });
+        // Limit how many we process to stay within Vercel's 60s timeout
+        const processLimit = sortMode === 'impact' ? 15 : 10;
+        const bills = recentBills.slice(0, processLimit);
 
-        // Bills arrive sorted by updateDate desc from the API
+        // Bills filtered to recent activity only
 
         // Map Congress API bill types to their Congress.gov URL slug
         const typeSlugMap = {
