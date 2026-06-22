@@ -86,7 +86,7 @@ export async function POST(request) {
         // For impact mode we fetch a larger pool (40) so there are enough bills
         // to find genuinely High Impact ones among recent activity.
         // For recent mode we fetch 20 — speed matters more than breadth.
-        const batchSize = sortMode === 'impact' ? 40 : 20;
+        const batchSize = sortMode === 'impact' ? 15 : 10;
         // Only fetch bills updated in the last 90 days to avoid decades-old bills
         const fromDate = new Date();
         fromDate.setDate(fromDate.getDate() - 90);
