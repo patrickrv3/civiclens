@@ -81,7 +81,7 @@ const Icons = {
 };
 
 const navItems = [
-    { id: 'feed', label: 'My Feed', icon: Icons.feed, badge: '3' },
+    { id: 'feed', label: 'My Feed', icon: Icons.feed },
     { id: 'assistant', label: 'AI Assistant', icon: Icons.assistant },
     { id: 'reps', label: 'Representatives', icon: Icons.reps },
     { id: 'elections', label: 'Elections & Actions', icon: Icons.elections },
