@@ -57,15 +57,25 @@ export async function POST(request) {
         const { lifeTags, interests } = await request.json();
 
         // Fetch recent executive orders from the Federal Register (free, no key needed)
-        const frUrl = 'https://www.federalregister.gov/api/v1/documents.json' +
-            '?conditions[type][]=PRESDOCU' +
-            '&conditions[presidential_document_type][]=executive_order' +
-            '&per_page=10' +
-            '&order=newest' +
-            '&fields[]=document_number,title,abstract,signing_date,html_url,executive_order_number';
+        const frParams = new URLSearchParams();
+        frParams.append('conditions[type][]', 'PRESDOCU');
+        frParams.append('conditions[presidential_document_type][]', 'executive_order');
+        frParams.append('per_page', '10');
+        frParams.append('order', 'newest');
+        frParams.append('fields[]', 'document_number');
+        frParams.append('fields[]', 'title');
+        frParams.append('fields[]', 'abstract');
+        frParams.append('fields[]', 'signing_date');
+        frParams.append('fields[]', 'html_url');
+        frParams.append('fields[]', 'executive_order_number');
+        const frUrl = `https://www.federalregister.gov/api/v1/documents.json?${frParams.toString()}`;
 
         const frRes = await fetch(frUrl);
-        if (!frRes.ok) throw new Error(`Federal Register API error: ${frRes.status}`);
+        if (!frRes.ok) {
+            const errText = await frRes.text();
+            console.error(`Federal Register API error: ${frRes.status} - ${errText.substring(0, 200)}`);
+            throw new Error(`Federal Register API error: ${frRes.status}`);
+        }
         const frData = await frRes.json();
         const orders = frData.results || [];
 
