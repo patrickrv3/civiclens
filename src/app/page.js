@@ -348,11 +348,12 @@ export default function Home() {
               <button
                 className={`${styles.tabBtn} ${activeTab === 'State & Local' ? styles.tabActive : ''}`}
                 onClick={() => {
-                  if (!isPro) { setShowUpgradeModal(true); return; }
+                  const native = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
+                  if (!native && !isPro) { setShowUpgradeModal(true); return; }
                   setActiveTab('State & Local');
                 }}
               >
-                State &amp; Local {!isPro && <span style={{ fontSize: '0.7rem', marginLeft: '4px' }}>🔒</span>}
+                State &amp; Local {!isPro && !(typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) && <span style={{ fontSize: '0.7rem', marginLeft: '4px' }}>🔒</span>}
               </button>
             </div>
 
@@ -520,7 +521,7 @@ export default function Home() {
           <button className={styles.ctaButton} onClick={() => alert('Please use the sidebar to open the profile setup.')}>Get Started</button>
         </div>
       )}
-      {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} />}
+      {showUpgradeModal && !(typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) && <UpgradeModal onClose={() => setShowUpgradeModal(false)} />}
     </AppShell>
   );
 }

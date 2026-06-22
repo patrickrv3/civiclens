@@ -68,7 +68,8 @@ export default function FeedCard({ item, profile }) {
             window.dispatchEvent(new CustomEvent('civiclens:openAuth'));
             return;
         }
-        if (!isPro) {
+        const native = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
+        if (!native && !isPro) {
             setShowUpgrade(true);
             return;
         }
@@ -252,7 +253,7 @@ export default function FeedCard({ item, profile }) {
                 </button>
             </div>
         </article>
-        {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
+        {showUpgrade && !(typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
         </>
     );
 }

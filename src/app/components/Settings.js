@@ -163,7 +163,8 @@ export default function Settings() {
                 </div>
             </div>
 
-            {/* Subscription */}
+            {/* Subscription — hidden in iOS app until Apple IAP is implemented */}
+            {!(typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) && (
             <div className={styles.section}>
                 <div className={styles.sectionTitle}>⚡ Subscription</div>
                 <div className={styles.card}>
@@ -217,6 +218,7 @@ export default function Settings() {
                     )}
                 </div>
             </div>
+            )}
 
             {/* Account */}
             <div className={styles.section}>

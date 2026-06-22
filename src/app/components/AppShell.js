@@ -105,8 +105,9 @@ export default function AppShell({ children }) {
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
     const handleNavClick = (id) => {
-        // Gate State & Local behind Pro subscription
-        if (id === 'state' && !isPro) {
+        // Gate State & Local behind Pro subscription (web only — iOS has no IAP yet)
+        const native = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
+        if (id === 'state' && !native && !isPro) {
             setShowUpgradeModal(true);
             setSidebarOpen(false);
             return;
@@ -322,7 +323,7 @@ export default function AppShell({ children }) {
                         }}
                     />
                 )}
-                {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} />}
+                {showUpgradeModal && !(typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) && <UpgradeModal onClose={() => setShowUpgradeModal(false)} />}
             </div>
         </AskAIContext.Provider>
     );
