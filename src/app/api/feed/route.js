@@ -87,24 +87,23 @@ export async function POST(request) {
         // to find genuinely High Impact ones among recent activity.
         // For recent mode we fetch 20 — speed matters more than breadth.
         const batchSize = sortMode === 'impact' ? 40 : 20;
-        const congressParams = new URLSearchParams({
-            api_key: process.env.CONGRESS_API_KEY,
-            limit: batchSize.toString(),
-            offset: pageOffset.toString(),
-            sort: 'updateDate desc',
-            format: 'json',
-        });
-        const congressUrl = `https://api.congress.gov/v3/bill/119?${congressParams.toString()}`;
+        const congressUrl = "https://api.congress.gov/v3/bill?api_key=" + process.env.CONGRESS_API_KEY +
+            "&limit=" + batchSize +
+            "&offset=" + pageOffset +
+            "&sort=updateDate" +
+            "&sort_direction=desc" +
+            "&format=json";
         const congressRes = await fetch(congressUrl);
 
         if (!congressRes.ok) {
             const errorText = await congressRes.text();
             console.error(`Congress API Error: ${congressRes.status} - ${errorText}`);
-            throw new Error(`Congress API Error: ${congressRes.status} - ${errorText.substring(0, 200)}`);
+            throw new Error(`Congress API Error: ${congressRes.status}`);
         }
 
         const data = await congressRes.json();
-        const bills = data.bills || [];
+        // Filter to only 119th Congress (2025-2027) to avoid decades-old bills
+        const bills = (data.bills || []).filter(b => b.congress >= 119);
 
         // Bills arrive sorted by updateDate desc from the API
 
