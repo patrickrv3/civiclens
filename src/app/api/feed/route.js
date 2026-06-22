@@ -126,6 +126,7 @@ export async function POST(request) {
                 id: congressNum + "-" + typeUpper.toLowerCase() + "-" + b.number,
                 title: b.title,
                 latestAction: b.latestAction?.text || "",
+                latestActionDate: b.latestAction?.actionDate || b.updateDate,
                 updateDate: b.updateDate,
                 url,
             };
@@ -201,8 +202,8 @@ export async function POST(request) {
             .map(b => {
                 const item = allItemsById.get(b.id);
                 if (!item) return null;
-                // Attach the real updateDate from Congress.gov for accurate sorting and display
-                return { ...item, updateDate: b.updateDate };
+                // Attach dates from Congress.gov for accurate sorting and display
+                return { ...item, updateDate: b.updateDate, latestActionDate: b.latestActionDate };
             })
             .filter(Boolean);
 

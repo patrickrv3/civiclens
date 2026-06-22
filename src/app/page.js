@@ -301,7 +301,7 @@ export default function Home() {
     }
     // Always sort the full combined list so new batches land in the correct position
     if (sortBy === 'recent') {
-      return items.sort((a, b) => new Date(b.updateDate || b.date || 0) - new Date(a.updateDate || a.date || 0));
+      return items.sort((a, b) => new Date(b.latestActionDate || b.updateDate || b.date || 0) - new Date(a.latestActionDate || a.updateDate || a.date || 0));
     }
     // High Impact filter: globally sort entire list — prevents new-batch High Impact
     // items from appearing below Moderate/Low items from earlier batches
