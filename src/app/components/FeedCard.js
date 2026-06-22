@@ -124,7 +124,7 @@ export default function FeedCard({ item, profile }) {
                     <span className={styles.feedTime}>{item.level} • {(() => {
                         const d = item.latestActionDate || item.updateDate || item.date;
                         if (!d) return '';
-                        return `Updated ${new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+                        return `Last action: ${new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
                     })()}</span>
                 </div>
                 <div className={styles.feedImpact} style={{
