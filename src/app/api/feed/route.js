@@ -192,13 +192,18 @@ export async function POST(request) {
             });
         }
 
-        // 6. Merge cached + fresh items
+        // 6. Merge cached + fresh items, and attach the real updateDate from Congress.gov
         const allItemsById = new Map();
         [...cachedItems, ...aiItems].forEach(item => {
             if (item.id) allItemsById.set(item.id, item);
         });
         let orderedItems = billsForProcessing
-            .map(b => allItemsById.get(b.id))
+            .map(b => {
+                const item = allItemsById.get(b.id);
+                if (!item) return null;
+                // Attach the real updateDate from Congress.gov for accurate sorting and display
+                return { ...item, updateDate: b.updateDate };
+            })
             .filter(Boolean);
 
         // 7. Server-side sort so the client always receives items in the right order.

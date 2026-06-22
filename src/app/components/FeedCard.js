@@ -121,7 +121,7 @@ export default function FeedCard({ item, profile }) {
             <div className={styles.feedHeader}>
                 <div className={styles.feedMeta}>
                     <span className={`${styles.feedBadge} ${badgeClass}`}>{item.type}</span>
-                    <span className={styles.feedTime}>{item.level} • {item.date}</span>
+                    <span className={styles.feedTime}>{item.level} • {item.updateDate ? `Updated ${new Date(item.updateDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : item.date}</span>
                 </div>
                 <div className={styles.feedImpact} style={{
                     color: item.impactLevel === 'High Impact' ? '#dc2626' :
