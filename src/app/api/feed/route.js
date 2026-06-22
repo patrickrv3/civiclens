@@ -87,15 +87,20 @@ export async function POST(request) {
         // to find genuinely High Impact ones among recent activity.
         // For recent mode we fetch 20 — speed matters more than breadth.
         const batchSize = sortMode === 'impact' ? 40 : 20;
-        const congressUrl = "https://api.congress.gov/v3/bill/119?api_key=" + process.env.CONGRESS_API_KEY +
-            "&limit=" + batchSize +
-            "&offset=" + pageOffset +
-            "&sort=updateDate+desc" +
-            "&format=json";
+        const congressParams = new URLSearchParams({
+            api_key: process.env.CONGRESS_API_KEY,
+            limit: batchSize.toString(),
+            offset: pageOffset.toString(),
+            sort: 'updateDate desc',
+            format: 'json',
+        });
+        const congressUrl = `https://api.congress.gov/v3/bill/119?${congressParams.toString()}`;
         const congressRes = await fetch(congressUrl);
 
         if (!congressRes.ok) {
-            throw new Error(`Congress API Error: ${congressRes.status}`);
+            const errorText = await congressRes.text();
+            console.error(`Congress API Error: ${congressRes.status} - ${errorText}`);
+            throw new Error(`Congress API Error: ${congressRes.status} - ${errorText.substring(0, 200)}`);
         }
 
         const data = await congressRes.json();
