@@ -19,43 +19,64 @@ export default function CourtRulings() {
 
     const [rulings, setRulings] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [error, setError] = useState('');
     const [profileFilter, setProfileFilter] = useState('all');
     const [courtFilter, setCourtFilter] = useState('all');
     const [topicFilter, setTopicFilter] = useState('all');
     const [sortBy, setSortBy] = useState('recent');
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(false);
 
     const isNative = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
     const canSeeAll = isPro || isNative;
 
-    // Fetch rulings on mount
-    useEffect(() => {
-        async function fetchRulings() {
+    // Fetch rulings
+    const fetchRulings = async (pageNum = 1, append = false) => {
+        if (append) {
+            setIsLoadingMore(true);
+        } else {
             setIsLoading(true);
-            setError('');
-            try {
-                const res = await fetch('/api/court-rulings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        lifeTags: profile.lifeTags || [],
-                        interests: profile.interests || [],
-                    }),
-                });
-                if (!res.ok) throw new Error(`API error: ${res.status}`);
-                const data = await res.json();
-                if (data.error) throw new Error(data.error);
-                setRulings(data.items || []);
-            } catch (err) {
-                console.error('Court rulings fetch error:', err);
-                setError(err.message);
-            } finally {
-                setIsLoading(false);
-            }
         }
-        fetchRulings();
+        setError('');
+        try {
+            const res = await fetch('/api/court-rulings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    lifeTags: profile.lifeTags || [],
+                    interests: profile.interests || [],
+                    page: pageNum,
+                }),
+            });
+            if (!res.ok) throw new Error(`API error: ${res.status}`);
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            if (append) {
+                setRulings(prev => [...prev, ...(data.items || [])]);
+            } else {
+                setRulings(data.items || []);
+            }
+            setHasMore(data.hasMore || false);
+            setPage(pageNum);
+        } catch (err) {
+            console.error('Court rulings fetch error:', err);
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+            setIsLoadingMore(false);
+        }
+    };
+
+    // Fetch on mount
+    useEffect(() => {
+        fetchRulings(1, false);
     }, [profile.lifeTags, profile.interests]);
+
+    const handleLoadMore = () => {
+        fetchRulings(page + 1, true);
+    };
 
     const handleCourtFilter = (court) => {
         setCourtFilter(court);
@@ -208,6 +229,19 @@ export default function CourtRulings() {
                     {filteredRulings.map(item => (
                         <FeedCard key={item.id} item={item} profile={profile} />
                     ))}
+
+                    {/* Load More Button */}
+                    {hasMore && !isLoadingMore && (
+                        <button className={styles.loadMoreBtn} onClick={handleLoadMore}>
+                            Load More Rulings
+                        </button>
+                    )}
+                    {isLoadingMore && (
+                        <div className={styles.loadingMore}>
+                            <div className={styles.spinnerSmall} />
+                            <span>Loading more rulings...</span>
+                        </div>
+                    )}
                 </div>
             )}
 

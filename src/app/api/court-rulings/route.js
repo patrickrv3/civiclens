@@ -220,10 +220,10 @@ async function fetchFromCourtListener() {
 
     // Prioritize: SCOTUS first, then high-profile, then circuits + state by date
     const scotusSlice = dedup(scotusResults).slice(0, 5);
-    const highProfileSlice = dedup(highProfileResults).slice(0, 5);
+    const highProfileSlice = dedup(highProfileResults).slice(0, 10);
     const otherResults = dedup([...circuitResults, ...stateResults])
         .sort((a, b) => (b.dateFiled || '').localeCompare(a.dateFiled || ''));
-    const otherSlice = otherResults.slice(0, 5);
+    const otherSlice = otherResults.slice(0, 10);
 
     const total = [...scotusSlice, ...highProfileSlice, ...otherSlice];
     console.log(`Prioritized: ${scotusSlice.length} SCOTUS + ${highProfileSlice.length} HighProfile + ${otherSlice.length} other = ${total.length} total`);
@@ -267,34 +267,43 @@ function shapeOpinion(opinion) {
 
 export async function POST(request) {
     try {
-        const { lifeTags, interests } = await request.json();
+        const { lifeTags, interests, page = 1 } = await request.json();
+        const PAGE_SIZE = 10;
+        const offset = (page - 1) * PAGE_SIZE;
 
         // Step 1: Check rate limit
         const { shouldSkip, cachedIds } = await checkRateLimitCache();
 
         if (shouldSkip && cachedIds.length > 0) {
+            // Paginate through cached IDs
+            const pageIds = cachedIds.slice(offset, offset + PAGE_SIZE);
             const cachedResults = await Promise.all(
-                cachedIds.map(id => getCachedSummary(id))
+                pageIds.map(id => getCachedSummary(id))
             );
             const validCached = cachedResults.filter(Boolean);
-            console.log(`Rate limit hit: ${cachedIds.length} IDs, ${validCached.length} valid cached`);
+            console.log(`Rate limit hit: page=${page}, ${pageIds.length} IDs, ${validCached.length} valid cached`);
 
             if (validCached.length > 0) {
                 const scotusCount = validCached.filter(i => i.courtType === 'scotus').length;
-                return NextResponse.json({ items: validCached, scotusCount });
+                const hasMore = offset + PAGE_SIZE < cachedIds.length;
+                return NextResponse.json({ items: validCached, scotusCount, hasMore });
             }
             console.log('Cached IDs found but no valid summaries, re-fetching...');
         }
 
-        // Step 2: Fetch from CourtListener (SCOTUS + circuits + state, in parallel)
+        // Step 2: Fetch from CourtListener (all 4 queries in parallel)
         const rawOpinions = await fetchFromCourtListener();
-        const opinionsForProcessing = rawOpinions.map(shapeOpinion);
+        const allOpinions = rawOpinions.map(shapeOpinion);
 
-        console.log(`Shaped ${opinionsForProcessing.length} opinions for processing`);
+        console.log(`Shaped ${allOpinions.length} total opinions`);
 
-        // Save ruling IDs for rate limiting
-        const rulingIds = opinionsForProcessing.map(o => o.id);
-        saveRateLimitCache(rulingIds);
+        // Save ALL ruling IDs for rate limiting + pagination
+        const allRulingIds = allOpinions.map(o => o.id);
+        saveRateLimitCache(allRulingIds);
+
+        // Paginate
+        const opinionsForProcessing = allOpinions.slice(offset, offset + PAGE_SIZE);
+        console.log(`Page ${page}: processing items ${offset}-${offset + opinionsForProcessing.length} of ${allOpinions.length}`);
 
         // Step 3: Check Firestore cache
         const cacheResults = await Promise.all(
@@ -314,10 +323,9 @@ export async function POST(request) {
 
         console.log(`Cache check: ${cachedItems.length} cached, ${uncached.length} need AI`);
 
-        // Step 4: Process uncached rulings with OpenAI (in batches of 8 to avoid timeout)
+        // Step 4: Process uncached rulings with OpenAI
         let aiItems = [];
         if (uncached.length > 0) {
-            // Only process up to 10 at once to stay within timeout
             const batch = uncached.slice(0, 10);
             const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || '' });
             const interestsText = interests?.length
@@ -368,16 +376,16 @@ export async function POST(request) {
         // Step 5: Combine cached + AI results
         const items = [...cachedItems, ...aiItems];
         items.sort((a, b) => {
-            // SCOTUS always first, then by date
             if (a.courtType === 'scotus' && b.courtType !== 'scotus') return -1;
             if (a.courtType !== 'scotus' && b.courtType === 'scotus') return 1;
             return (b.date || '').localeCompare(a.date || '');
         });
 
         const scotusCount = items.filter(i => i.courtType === 'scotus').length;
-        console.log(`Final: ${items.length} items (${scotusCount} SCOTUS)`);
+        const hasMore = offset + PAGE_SIZE < allOpinions.length;
+        console.log(`Final page ${page}: ${items.length} items, hasMore=${hasMore}`);
 
-        return NextResponse.json({ items, scotusCount });
+        return NextResponse.json({ items, scotusCount, hasMore });
 
     } catch (error) {
         console.error('Court rulings API error:', error);
