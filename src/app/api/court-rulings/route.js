@@ -101,7 +101,7 @@ async function cacheSummary(id, data) {
 
 async function checkRateLimitCache() {
     try {
-        const ref = doc(db, 'billSummaries', '_court_rate_limit_v4_');
+        const ref = doc(db, 'billSummaries', '_court_rate_limit_v5_');
         const snap = await getDoc(ref);
         if (!snap.exists()) return { shouldSkip: false, cachedIds: [] };
         const data = snap.data();
@@ -274,7 +274,7 @@ export async function POST(request) {
         // Step 1: Check rate limit
         const { shouldSkip, cachedIds } = await checkRateLimitCache();
 
-        if (shouldSkip && cachedIds.length > 0) {
+        if (shouldSkip && cachedIds.length >= 10) {
             // Paginate through cached IDs
             const pageIds = cachedIds.slice(offset, offset + PAGE_SIZE);
             const cachedResults = await Promise.all(
@@ -289,6 +289,8 @@ export async function POST(request) {
                 return NextResponse.json({ items: validCached, scotusCount, hasMore });
             }
             console.log('Cached IDs found but no valid summaries, re-fetching...');
+        } else if (shouldSkip && cachedIds.length > 0 && cachedIds.length < 10) {
+            console.log(`Rate limit cache has only ${cachedIds.length} items (partial failure?), re-fetching...`);
         }
 
         // Step 2: Fetch from CourtListener (all 4 queries in parallel)
@@ -297,9 +299,14 @@ export async function POST(request) {
 
         console.log(`Shaped ${allOpinions.length} total opinions`);
 
-        // Save ALL ruling IDs for rate limiting + pagination
+        // Only save to rate limit cache if we got a meaningful number of results
+        // Prevents partial failures (e.g. only SCOTUS) from blocking future fetches
         const allRulingIds = allOpinions.map(o => o.id);
-        saveRateLimitCache(allRulingIds);
+        if (allRulingIds.length >= 10) {
+            saveRateLimitCache(allRulingIds);
+        } else {
+            console.log(`Only ${allRulingIds.length} results — skipping rate limit cache to allow re-fetch`);
+        }
 
         // Paginate
         const opinionsForProcessing = allOpinions.slice(offset, offset + PAGE_SIZE);
