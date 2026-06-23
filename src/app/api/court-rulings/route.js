@@ -16,7 +16,7 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const db = getFirestore(app);
 
-const CACHE_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
+const CACHE_TTL_MS = 1 * 60 * 60 * 1000; // 1 hour (reduced to refresh summaries with new prompt)
 const RATE_LIMIT_MS = 6 * 60 * 60 * 1000; // 6 hours between CourtListener fetches
 
 // CourtListener court IDs
@@ -58,7 +58,7 @@ For each ruling, provide:
 - id: The exact ID provided.
 - shortTitle: A very short, punchy plain-English title (max 6-8 words).
 - originalTitle: The exact case name provided.
-- generalSummary: A simple, plain-English summary of what the ruling decided. Maximum 2 sentences.
+- generalSummary: A plain-English summary that MUST state what the court actually ruled or decided. The first sentence should clearly state the outcome (e.g., "The court ruled that...", "The judge blocked...", "The court upheld...", "The appeals court reversed..."). The second sentence should explain the real-world impact or what it means. Do NOT just describe what the case is about — tell the reader what happened. Maximum 2 sentences.
 - impactLevel: One of "High Impact", "Moderate Impact", or "Low Impact".
 - profileLevel: One of "High Profile", "Notable", or "Routine" based on these criteria:
   * "High Profile": Constitutional rights (1st, 2nd, 4th, 14th Amendment), immigration/asylum/deportation, executive power/separation of powers, abortion/reproductive rights, voting rights, gun control, LGBTQ+ rights, cases involving government agencies, cases overturning precedent, cases widely covered in media, district court rulings blocking government policy.
@@ -67,8 +67,8 @@ For each ruling, provide:
 - topics: An array of relevant topic strings from this list: "Immigration", "First Amendment", "Executive Power", "Civil Rights", "Voting Rights", "Criminal Justice", "Environment", "Healthcare", "Gun Rights", "Labor", "Technology", "Education". Only include genuinely relevant topics.
 - court: The human-readable court name provided.
 - courtType: The court type provided (one of "scotus", "federal_appeals", "state_supreme", "district").
-- status: A brief ruling outcome text (e.g., "Affirmed", "Reversed", "Remanded", "Injunction Granted").
-- latestAction: A brief 1-sentence description of the ruling action.
+- status: A specific ruling outcome (e.g., "Blocked", "Upheld", "Reversed", "Injunction Granted", "Affirmed", "Struck Down", "Remanded"). Be specific about what the court did.
+- latestAction: A 1-sentence description of the specific ruling action and outcome. State what the judge or court decided, not just that they "reviewed" or "considered" the case.
 - tagImpacts: A JSON object where keys are the specific Life Tags provided, and values are a 1-sentence explanation of why this ruling matters to someone with that tag. Only include tags with a genuine impact.
 - type: Always "Court Ruling".
 - level: Use the level value provided ("Federal" or "State").
@@ -101,7 +101,7 @@ async function cacheSummary(id, data) {
 
 async function checkRateLimitCache() {
     try {
-        const ref = doc(db, 'billSummaries', '_court_rate_limit_v2_');
+        const ref = doc(db, 'billSummaries', '_court_rate_limit_v3_');
         const snap = await getDoc(ref);
         if (!snap.exists()) return { shouldSkip: false, cachedIds: [] };
         const data = snap.data();
