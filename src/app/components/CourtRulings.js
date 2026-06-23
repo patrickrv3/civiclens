@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import styles from './CourtRulings.module.css';
 import FeedCard from './FeedCard';
 import { useProfile } from '../context/ProfileContext';
@@ -74,9 +74,27 @@ export default function CourtRulings() {
         fetchRulings(1, false);
     }, [profile.lifeTags, profile.interests]);
 
-    const handleLoadMore = () => {
-        fetchRulings(page + 1, true);
-    };
+    const handleLoadMore = useCallback(() => {
+        if (!isLoadingMore && hasMore) {
+            fetchRulings(page + 1, true);
+        }
+    }, [page, isLoadingMore, hasMore]);
+
+    // Infinite scroll: observe sentinel div at bottom
+    const sentinelRef = useRef(null);
+    useEffect(() => {
+        if (!sentinelRef.current) return;
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting && hasMore && !isLoadingMore && !isLoading) {
+                    handleLoadMore();
+                }
+            },
+            { threshold: 0.1 }
+        );
+        observer.observe(sentinelRef.current);
+        return () => observer.disconnect();
+    }, [hasMore, isLoadingMore, isLoading, handleLoadMore]);
 
     const handleCourtFilter = (court) => {
         setCourtFilter(court);
@@ -230,16 +248,16 @@ export default function CourtRulings() {
                         <FeedCard key={item.id} item={item} profile={profile} />
                     ))}
 
-                    {/* Load More Button */}
-                    {hasMore && !isLoadingMore && (
-                        <button className={styles.loadMoreBtn} onClick={handleLoadMore}>
-                            Load More Rulings
-                        </button>
-                    )}
-                    {isLoadingMore && (
-                        <div className={styles.loadingMore}>
+                    {/* Infinite scroll sentinel */}
+                    {hasMore && (
+                        <div ref={sentinelRef} className={styles.loadingMore}>
                             <div className={styles.spinnerSmall} />
                             <span>Loading more rulings...</span>
+                        </div>
+                    )}
+                    {!hasMore && rulings.length > 10 && (
+                        <div className={styles.endOfList}>
+                            You&apos;re all caught up! ⚖️
                         </div>
                     )}
                 </div>

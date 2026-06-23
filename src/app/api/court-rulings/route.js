@@ -101,7 +101,7 @@ async function cacheSummary(id, data) {
 
 async function checkRateLimitCache() {
     try {
-        const ref = doc(db, 'billSummaries', '_court_rate_limit_v3_');
+        const ref = doc(db, 'billSummaries', '_court_rate_limit_v4_');
         const snap = await getDoc(ref);
         if (!snap.exists()) return { shouldSkip: false, cachedIds: [] };
         const data = snap.data();
@@ -219,11 +219,11 @@ async function fetchFromCourtListener() {
     });
 
     // Prioritize: SCOTUS first, then high-profile, then circuits + state by date
-    const scotusSlice = dedup(scotusResults).slice(0, 5);
-    const highProfileSlice = dedup(highProfileResults).slice(0, 10);
+    const scotusSlice = dedup(scotusResults).slice(0, 10);
+    const highProfileSlice = dedup(highProfileResults).slice(0, 20);
     const otherResults = dedup([...circuitResults, ...stateResults])
         .sort((a, b) => (b.dateFiled || '').localeCompare(a.dateFiled || ''));
-    const otherSlice = otherResults.slice(0, 10);
+    const otherSlice = otherResults.slice(0, 20);
 
     const total = [...scotusSlice, ...highProfileSlice, ...otherSlice];
     console.log(`Prioritized: ${scotusSlice.length} SCOTUS + ${highProfileSlice.length} HighProfile + ${otherSlice.length} other = ${total.length} total`);
