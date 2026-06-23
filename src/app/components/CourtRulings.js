@@ -57,12 +57,7 @@ export default function CourtRulings() {
         fetchRulings();
     }, [profile.lifeTags, profile.interests]);
 
-    // Handle court filter clicks with Pro gating
     const handleCourtFilter = (court) => {
-        if (!canSeeAll && court !== 'all' && court !== 'scotus') {
-            setShowUpgradeModal(true);
-            return;
-        }
         setCourtFilter(court);
     };
 
@@ -129,9 +124,9 @@ export default function CourtRulings() {
                     {[
                         { id: 'all', label: 'All Courts' },
                         { id: 'scotus', label: 'Supreme Court' },
-                        { id: 'federal_appeals', label: `Federal Appeals${!canSeeAll ? ' 🔒' : ''}` },
-                        { id: 'state_supreme', label: `State Supreme${!canSeeAll ? ' 🔒' : ''}` },
-                        { id: 'district', label: `District${!canSeeAll ? ' 🔒' : ''}` },
+                        { id: 'federal_appeals', label: 'Federal Appeals' },
+                        { id: 'state_supreme', label: 'State Supreme' },
+                        { id: 'district', label: 'District' },
                     ].map(f => (
                         <button
                             key={f.id}
@@ -177,14 +172,7 @@ export default function CourtRulings() {
                 </div>
             </div>
 
-            {/* Pro Upsell Banner */}
-            {!canSeeAll && (
-                <div className={styles.proBanner}>
-                    🏛️ Showing <strong>Supreme Court rulings only</strong>.{' '}
-                    <a onClick={() => setShowUpgradeModal(true)}>Upgrade to Pro</a>{' '}
-                    to see Federal Appeals, State Supreme Courts &amp; District Court rulings.
-                </div>
-            )}
+
 
             {/* Loading State */}
             {isLoading && (
