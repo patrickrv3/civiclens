@@ -101,7 +101,7 @@ async function cacheSummary(id, data) {
 
 async function checkRateLimitCache() {
     try {
-        const ref = doc(db, 'billSummaries', '_court_rate_limit_v5_');
+        const ref = doc(db, 'billSummaries', '_court_rate_limit_v6_');
         const snap = await getDoc(ref);
         if (!snap.exists()) return { shouldSkip: false, cachedIds: [] };
         const data = snap.data();
@@ -125,109 +125,134 @@ async function saveRateLimitCache(rulingIds) {
         console.warn('Rate limit cache write failed:', err.message);
     }
 }
+/**
+ * Fetch from CourtListener with a single query.
+ */
+async function fetchCL(params, label) {
+    const url = `https://www.courtlistener.com/api/rest/v4/search/?${params.toString()}`;
+    console.log(`CourtListener ${label}:`, url);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+
+    try {
+        const res = await fetch(url, {
+            headers: { Authorization: `Token ${process.env.COURTLISTENER_API_TOKEN}` },
+            signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        if (!res.ok) {
+            console.error(`CourtListener ${label} error: ${res.status}`);
+            return [];
+        }
+        const data = await res.json();
+        console.log(`CourtListener ${label}: ${(data.results || []).length} results`);
+        return data.results || [];
+    } catch (err) {
+        clearTimeout(timeout);
+        console.error(`CourtListener ${label} failed:`, err.message);
+        return [];
+    }
+}
 
 /**
- * Fetch opinions from CourtListener. Makes separate queries for SCOTUS and other courts
- * to ensure SCOTUS opinions are always included.
+ * Fetch opinions from CourtListener using 2 queries (not 4) to avoid rate limits:
+ *   1. All named courts (SCOTUS + circuits + state) in one query
+ *   2. Keyword search for high-profile district court rulings
+ *
+ * Then smart-distribute into 50 slots.
  */
 async function fetchFromCourtListener() {
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
     const filedAfter = ninetyDaysAgo.toISOString().split('T')[0];
 
-    const fetchWithCourts = async (courts, label) => {
-        const params = new URLSearchParams();
-        params.append('type', 'o');
-        params.append('order_by', 'dateFiled desc');
-        params.append('filed_after', filedAfter);
-        courts.forEach(court => params.append('court', court));
+    // Query 1: All named courts in ONE request
+    const allNamedCourts = [...SCOTUS_COURTS, ...CIRCUIT_COURTS, ...STATE_SUPREME_COURTS];
+    const courtsParams = new URLSearchParams();
+    courtsParams.append('type', 'o');
+    courtsParams.append('order_by', 'dateFiled desc');
+    courtsParams.append('filed_after', filedAfter);
+    allNamedCourts.forEach(c => courtsParams.append('court', c));
 
-        const url = `https://www.courtlistener.com/api/rest/v4/search/?${params.toString()}`;
-        console.log(`CourtListener ${label} URL:`, url);
+    const courtsResults = await fetchCL(courtsParams, 'AllCourts');
 
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000);
+    // Small delay to avoid rate limit before second request
+    await new Promise(resolve => setTimeout(resolve, 1500));
 
-        try {
-            const res = await fetch(url, {
-                headers: { Authorization: `Token ${process.env.COURTLISTENER_API_TOKEN}` },
-                signal: controller.signal,
-            });
-            clearTimeout(timeout);
-            if (!res.ok) {
-                console.error(`CourtListener ${label} error: ${res.status}`);
-                return [];
-            }
-            const data = await res.json();
-            console.log(`CourtListener ${label}: ${(data.results || []).length} results`);
-            return data.results || [];
-        } catch (err) {
-            clearTimeout(timeout);
-            console.error(`CourtListener ${label} failed:`, err.message);
-            return [];
-        }
-    };
+    // Query 2: Keyword search for high-profile (catches district courts)
+    const hpParams = new URLSearchParams();
+    hpParams.append('type', 'o');
+    hpParams.append('order_by', 'dateFiled desc');
+    hpParams.append('filed_after', filedAfter);
+    hpParams.append('q', '"preliminary injunction" OR "temporary restraining order" OR "unconstitutional" OR "voter rolls" OR "deportation" OR "executive order" OR "struck down" OR "enjoined"');
 
-    // Keyword search for high-profile district court rulings (injunctions, constitutional cases, etc.)
-    const fetchHighProfile = async () => {
-        const params = new URLSearchParams();
-        params.append('type', 'o');
-        params.append('order_by', 'dateFiled desc');
-        params.append('filed_after', filedAfter);
-        params.append('q', '"preliminary injunction" OR "temporary restraining order" OR "unconstitutional" OR "voter rolls" OR "deportation" OR "executive order" OR "struck down" OR "enjoined"');
+    const hpResults = await fetchCL(hpParams, 'HighProfile');
 
-        const url = `https://www.courtlistener.com/api/rest/v4/search/?${params.toString()}`;
-        console.log('CourtListener HighProfile URL:', url);
-
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000);
-
-        try {
-            const res = await fetch(url, {
-                headers: { Authorization: `Token ${process.env.COURTLISTENER_API_TOKEN}` },
-                signal: controller.signal,
-            });
-            clearTimeout(timeout);
-            if (!res.ok) {
-                console.error(`CourtListener HighProfile error: ${res.status}`);
-                return [];
-            }
-            const data = await res.json();
-            console.log(`CourtListener HighProfile: ${(data.results || []).length} results`);
-            return data.results || [];
-        } catch (err) {
-            clearTimeout(timeout);
-            console.error('CourtListener HighProfile failed:', err.message);
-            return [];
-        }
-    };
-
-    // Fetch all 4 queries in parallel
-    const [scotusResults, circuitResults, stateResults, highProfileResults] = await Promise.all([
-        fetchWithCourts(SCOTUS_COURTS, 'SCOTUS'),
-        fetchWithCourts(CIRCUIT_COURTS, 'Circuits'),
-        fetchWithCourts(STATE_SUPREME_COURTS, 'State Supreme'),
-        fetchHighProfile(),
-    ]);
-
-    // Deduplicate by cluster_id across all sources
+    // Deduplicate all results
     const seen = new Set();
-    const dedup = (results) => results.filter(r => {
+    const allResults = [...courtsResults, ...hpResults].filter(r => {
         const key = r.cluster_id || r.id || r.docket_id;
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
     });
 
-    // Prioritize: SCOTUS first, then high-profile, then circuits + state by date
-    const scotusSlice = dedup(scotusResults).slice(0, 10);
-    const highProfileSlice = dedup(highProfileResults).slice(0, 20);
-    const otherResults = dedup([...circuitResults, ...stateResults])
-        .sort((a, b) => (b.dateFiled || '').localeCompare(a.dateFiled || ''));
-    const otherSlice = otherResults.slice(0, 20);
+    // Categorize by court type
+    const buckets = { scotus: [], federal_appeals: [], state_supreme: [], district: [] };
+    for (const r of allResults) {
+        const courtId = r.court_id || '';
+        let type;
+        if (SCOTUS_COURTS.includes(courtId)) type = 'scotus';
+        else if (CIRCUIT_COURTS.includes(courtId)) type = 'federal_appeals';
+        else if (STATE_SUPREME_COURTS.includes(courtId)) type = 'state_supreme';
+        else type = 'district';
+        buckets[type].push(r);
+    }
 
-    const total = [...scotusSlice, ...highProfileSlice, ...otherSlice];
-    console.log(`Prioritized: ${scotusSlice.length} SCOTUS + ${highProfileSlice.length} HighProfile + ${otherSlice.length} other = ${total.length} total`);
-    return total;
+    // Sort each bucket by date (newest first)
+    for (const key of Object.keys(buckets)) {
+        buckets[key].sort((a, b) => (b.dateFiled || '').localeCompare(a.dateFiled || ''));
+    }
+
+    console.log(`Buckets: SCOTUS=${buckets.scotus.length}, Circuit=${buckets.federal_appeals.length}, State=${buckets.state_supreme.length}, District=${buckets.district.length}`);
+
+    // Smart distribution: allocate 50 slots
+    const TOTAL = 50;
+    const targets = {
+        scotus: 10,
+        federal_appeals: 15,
+        state_supreme: 10,
+        district: 15,
+    };
+
+    // First pass: fill each bucket up to its target
+    const selected = [];
+    let remaining = TOTAL;
+    const leftover = {};
+
+    for (const [type, target] of Object.entries(targets)) {
+        const available = buckets[type].slice(0, target);
+        selected.push(...available);
+        remaining -= available.length;
+        leftover[type] = buckets[type].slice(available.length); // unused from this bucket
+        console.log(`  ${type}: wanted ${target}, got ${available.length}`);
+    }
+
+    // Second pass: redistribute unused slots
+    if (remaining > 0) {
+        // Priority order for redistribution: district → circuit → state → scotus
+        const redistOrder = ['district', 'federal_appeals', 'state_supreme', 'scotus'];
+        for (const type of redistOrder) {
+            if (remaining <= 0) break;
+            const extra = leftover[type].slice(0, remaining);
+            selected.push(...extra);
+            remaining -= extra.length;
+            if (extra.length > 0) console.log(`  Redistributed ${extra.length} from ${type}`);
+        }
+    }
+
+    console.log(`Smart distribution: ${selected.length} total selected`);
+    return selected;
 }
 
 function getCourtType(courtId) {
