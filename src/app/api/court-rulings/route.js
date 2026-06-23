@@ -18,7 +18,7 @@ const db = getFirestore(app);
 
 const CACHE_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
 const RATE_LIMIT_MS = 6 * 60 * 60 * 1000; // 6 hours between CourtListener fetches
-const MAX_OPINIONS = 15; // Cap to stay within Vercel 60s timeout
+const MAX_OPINIONS = 8; // Cap to stay within Vercel 60s timeout
 
 // CourtListener court IDs
 const SCOTUS_COURTS = ['scotus'];
@@ -99,7 +99,7 @@ async function cacheSummary(id, data) {
  */
 async function checkRateLimitCache() {
     try {
-        const ref = doc(db, 'courtRulingsCache', 'latestBatch');
+        const ref = doc(db, 'billSummaries', '_court_rate_limit_');
         const snap = await getDoc(ref);
         if (!snap.exists()) return { shouldSkip: false, cachedIds: [] };
         const data = snap.data();
@@ -118,7 +118,7 @@ async function checkRateLimitCache() {
  */
 async function saveRateLimitCache(rulingIds) {
     try {
-        await setDoc(doc(db, 'courtRulingsCache', 'latestBatch'), {
+        await setDoc(doc(db, 'billSummaries', '_court_rate_limit_'), {
             rulingIds,
             fetchedAt: Date.now(),
         });
