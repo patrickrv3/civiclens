@@ -69,9 +69,6 @@ export default function CourtRulings() {
     // Apply filters and sorting
     const filteredRulings = rulings
         .filter(item => {
-            // Pro gating: non-Pro users only see SCOTUS on web
-            if (!canSeeAll && item.courtType !== 'scotus') return false;
-
             // Profile filter
             if (profileFilter === 'high-profile' && item.profileLevel !== 'High Profile') return false;
             if (profileFilter === 'notable' && item.profileLevel !== 'Notable') return false;

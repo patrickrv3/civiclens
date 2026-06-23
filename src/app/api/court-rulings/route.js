@@ -22,7 +22,10 @@ const MAX_OPINIONS = 8; // Cap to stay within Vercel 60s timeout
 
 // CourtListener court IDs
 const SCOTUS_COURTS = ['scotus'];
-const CIRCUIT_COURTS = ['ca9', 'cadc', 'ca5'];
+const CIRCUIT_COURTS = [
+    'ca1', 'ca2', 'ca3', 'ca4', 'ca5', 'ca6', 'ca7', 'ca8',
+    'ca9', 'ca10', 'ca11', 'cadc', 'cafc',
+];
 const ALL_COURTS = [...SCOTUS_COURTS, ...CIRCUIT_COURTS];
 
 // Human-readable court name mapping
