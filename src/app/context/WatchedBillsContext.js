@@ -49,38 +49,77 @@ export function WatchedBillsProvider({ children }) {
         const checkStatuses = async () => {
             setIsChecking(true);
             try {
-                const res = await fetch('/api/check-bill-status', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        bills: watchedBills.map(b => ({
-                            id: b.id,
-                            billIdentifier: b.billIdentifier,
-                            level: b.level,
-                            state: b.state,
-                            status: b.status,
-                        }))
-                    }),
-                });
-                if (!res.ok) return;
-                const { results } = await res.json();
+                // Separate bills from court rulings
+                const bills = watchedBills.filter(b => !b.id.startsWith('court-'));
+                const rulings = watchedBills.filter(b => b.id.startsWith('court-'));
 
-                for (const result of results) {
-                    if (result.changed) {
-                        // Update stored status
-                        const billRef = doc(db, 'users', user.uid, 'watchedBills', result.id);
-                        await updateDoc(billRef, { status: result.currentStatus });
+                // Check bill statuses
+                if (bills.length > 0) {
+                    const res = await fetch('/api/check-bill-status', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            bills: bills.map(b => ({
+                                id: b.id,
+                                billIdentifier: b.billIdentifier,
+                                level: b.level,
+                                state: b.state,
+                                status: b.status,
+                            }))
+                        }),
+                    });
+                    if (res.ok) {
+                        const { results } = await res.json();
+                        for (const result of results) {
+                            if (result.changed) {
+                                const billRef = doc(db, 'users', user.uid, 'watchedBills', result.id);
+                                await updateDoc(billRef, { status: result.currentStatus });
+                                const notifRef = collection(db, 'users', user.uid, 'notifications');
+                                await addDoc(notifRef, {
+                                    billId: result.id,
+                                    billTitle: result.title,
+                                    oldStatus: result.oldStatus,
+                                    newStatus: result.currentStatus,
+                                    type: 'bill',
+                                    createdAt: serverTimestamp(),
+                                    read: false,
+                                });
+                            }
+                        }
+                    }
+                }
 
-                        // Write notification
-                        const notifRef = collection(db, 'users', user.uid, 'notifications');
-                        await addDoc(notifRef, {
-                            billId: result.id,
-                            billTitle: result.title,
-                            oldStatus: result.oldStatus,
-                            newStatus: result.currentStatus,
-                            createdAt: serverTimestamp(),
-                            read: false,
-                        });
+                // Check court ruling statuses
+                if (rulings.length > 0) {
+                    const res = await fetch('/api/check-ruling-status', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            rulings: rulings.map(r => ({
+                                id: r.id,
+                                status: r.status,
+                                title: r.shortTitle || r.title || '',
+                            }))
+                        }),
+                    });
+                    if (res.ok) {
+                        const { results } = await res.json();
+                        for (const result of results) {
+                            if (result.changed) {
+                                const rulingRef = doc(db, 'users', user.uid, 'watchedBills', result.id);
+                                await updateDoc(rulingRef, { status: result.currentStatus });
+                                const notifRef = collection(db, 'users', user.uid, 'notifications');
+                                await addDoc(notifRef, {
+                                    billId: result.id,
+                                    billTitle: result.title,
+                                    oldStatus: result.oldStatus,
+                                    newStatus: result.currentStatus,
+                                    type: 'ruling',
+                                    createdAt: serverTimestamp(),
+                                    read: false,
+                                });
+                            }
+                        }
                     }
                 }
             } catch (err) {
@@ -90,7 +129,6 @@ export function WatchedBillsProvider({ children }) {
             }
         };
 
-        // Debounce — only check once the watched bills have loaded
         const timer = setTimeout(checkStatuses, 2000);
         return () => clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -77,14 +77,17 @@ export default function NotificationPanel({ onClose }) {
                 <div className={styles.sectionLabel}>Status Updates</div>
                 {notifications.length === 0 ? (
                     <div className={styles.emptySmall}>
-                        No status updates yet. Watch some bills and we&apos;ll notify you when they move.
+                        No status updates yet. Watch bills or court rulings and we&apos;ll notify you when they change.
                     </div>
                 ) : (
                     <ul className={styles.notifList}>
                         {notifications.map(n => (
                             <li key={n.id} className={`${styles.notifItem} ${!n.read ? styles.unread : ''}`}>
                                 <div className={styles.notifContent}>
-                                    <div className={styles.notifTitle}>{n.billTitle || n.billId}</div>
+                                    <div className={styles.notifTitle}>
+                                        {n.type === 'ruling' ? '⚖️ ' : '📋 '}
+                                        {n.billTitle || n.billId}
+                                    </div>
                                     <div className={styles.notifChange}>
                                         <span className={styles.oldStatus}>{n.oldStatus}</span>
                                         <span className={styles.arrow}>→</span>
@@ -112,14 +115,17 @@ export default function NotificationPanel({ onClose }) {
                 </div>
                 {watchedBills.length === 0 ? (
                     <div className={styles.emptySmall}>
-                        You&apos;re not watching any bills yet. Click the 🔔 on any feed card to start tracking.
+                        You&apos;re not watching any bills or rulings yet. Click the 🔔 on any card to start tracking.
                     </div>
                 ) : (
                     <ul className={styles.watchList}>
                         {watchedBills.map(b => (
                             <li key={b.id} className={styles.watchItem}>
                                 <div className={styles.watchContent}>
-                                    <div className={styles.watchTitle}>{b.shortTitle || b.title || b.id}</div>
+                                    <div className={styles.watchTitle}>
+                                        {b.id.startsWith('court-') ? '⚖️ ' : '📋 '}
+                                        {b.shortTitle || b.title || b.id}
+                                    </div>
                                     <div className={styles.watchStatus}>
                                         <span className={styles.levelTag}>{b.level}</span>
                                         {b.status}
