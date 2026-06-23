@@ -22,10 +22,7 @@ const MAX_OPINIONS = 8; // Cap to stay within Vercel 60s timeout
 
 // CourtListener court IDs
 const SCOTUS_COURTS = ['scotus'];
-const CIRCUIT_COURTS = [
-    'ca1', 'ca2', 'ca3', 'ca4', 'ca5', 'ca6', 'ca7', 'ca8',
-    'ca9', 'ca10', 'ca11', 'cadc', 'cafc',
-];
+const CIRCUIT_COURTS = ['ca9', 'cadc', 'ca5'];
 const ALL_COURTS = [...SCOTUS_COURTS, ...CIRCUIT_COURTS];
 
 // Human-readable court name mapping
@@ -143,21 +140,37 @@ async function fetchFromCourtListener() {
     ALL_COURTS.forEach(court => params.append('court', court));
 
     const url = `https://www.courtlistener.com/api/rest/v4/search/?${params.toString()}`;
+    console.log('CourtListener fetch URL:', url);
 
-    const res = await fetch(url, {
-        headers: {
-            Authorization: `Token ${process.env.COURTLISTENER_API_TOKEN}`,
-        },
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
-    if (!res.ok) {
-        const errText = await res.text();
-        console.error(`CourtListener API error: ${res.status} - ${errText.substring(0, 200)}`);
-        throw new Error(`CourtListener API error: ${res.status}`);
+    try {
+        const res = await fetch(url, {
+            headers: {
+                Authorization: `Token ${process.env.COURTLISTENER_API_TOKEN}`,
+            },
+            signal: controller.signal,
+        });
+        clearTimeout(timeout);
+
+        if (!res.ok) {
+            const errText = await res.text();
+            console.error(`CourtListener API error: ${res.status} - ${errText.substring(0, 200)}`);
+            throw new Error(`CourtListener API error: ${res.status}`);
+        }
+
+        const data = await res.json();
+        console.log(`CourtListener returned ${(data.results || []).length} opinions`);
+        return data.results || [];
+    } catch (err) {
+        clearTimeout(timeout);
+        if (err.name === 'AbortError') {
+            console.error('CourtListener fetch timed out after 15s');
+            throw new Error('CourtListener API timeout');
+        }
+        throw err;
     }
-
-    const data = await res.json();
-    return data.results || [];
 }
 
 /**
@@ -242,6 +255,8 @@ export async function POST(request) {
         const rulingIds = opinionsForProcessing.map(o => o.id);
         saveRateLimitCache(rulingIds); // fire-and-forget
 
+        console.log(`Court rulings: ${opinionsForProcessing.length} shaped, checking cache...`);
+
         // Step 3: Check Firestore cache in parallel
         const cacheResults = await Promise.all(
             opinionsForProcessing.map(o => getCachedSummary(o.id))
@@ -260,6 +275,7 @@ export async function POST(request) {
 
         // Step 4: Process uncached rulings with OpenAI
         let aiItems = [];
+        console.log(`Court rulings: ${cachedItems.length} cached, ${uncached.length} need AI`);
         if (uncached.length > 0) {
             const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || '' });
             const interestsText = interests?.length
