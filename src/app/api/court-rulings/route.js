@@ -167,29 +167,75 @@ async function fetchFromCourtListener() {
         }
     };
 
-    // Fetch SCOTUS and other courts in parallel
-    const [scotusResults, circuitResults, stateResults] = await Promise.all([
+    // Keyword search for high-profile district court rulings (injunctions, constitutional cases, etc.)
+    const fetchHighProfile = async () => {
+        const params = new URLSearchParams();
+        params.append('type', 'o');
+        params.append('order_by', 'dateFiled desc');
+        params.append('filed_after', filedAfter);
+        params.append('q', '"preliminary injunction" OR "temporary restraining order" OR "unconstitutional" OR "voter rolls" OR "deportation" OR "executive order" OR "struck down" OR "enjoined"');
+
+        const url = `https://www.courtlistener.com/api/rest/v4/search/?${params.toString()}`;
+        console.log('CourtListener HighProfile URL:', url);
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+
+        try {
+            const res = await fetch(url, {
+                headers: { Authorization: `Token ${process.env.COURTLISTENER_API_TOKEN}` },
+                signal: controller.signal,
+            });
+            clearTimeout(timeout);
+            if (!res.ok) {
+                console.error(`CourtListener HighProfile error: ${res.status}`);
+                return [];
+            }
+            const data = await res.json();
+            console.log(`CourtListener HighProfile: ${(data.results || []).length} results`);
+            return data.results || [];
+        } catch (err) {
+            clearTimeout(timeout);
+            console.error('CourtListener HighProfile failed:', err.message);
+            return [];
+        }
+    };
+
+    // Fetch all 4 queries in parallel
+    const [scotusResults, circuitResults, stateResults, highProfileResults] = await Promise.all([
         fetchWithCourts(SCOTUS_COURTS, 'SCOTUS'),
         fetchWithCourts(CIRCUIT_COURTS, 'Circuits'),
         fetchWithCourts(STATE_SUPREME_COURTS, 'State Supreme'),
+        fetchHighProfile(),
     ]);
 
-    // Prioritize: all SCOTUS first, then mix circuits + state by date
-    const otherResults = [...circuitResults, ...stateResults]
+    // Deduplicate by cluster_id across all sources
+    const seen = new Set();
+    const dedup = (results) => results.filter(r => {
+        const key = r.cluster_id || r.id || r.docket_id;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+
+    // Prioritize: SCOTUS first, then high-profile, then circuits + state by date
+    const scotusSlice = dedup(scotusResults).slice(0, 5);
+    const highProfileSlice = dedup(highProfileResults).slice(0, 5);
+    const otherResults = dedup([...circuitResults, ...stateResults])
         .sort((a, b) => (b.dateFiled || '').localeCompare(a.dateFiled || ''));
+    const otherSlice = otherResults.slice(0, 5);
 
-    // Take up to 5 SCOTUS + up to 10 other courts = max 15
-    const scotusSlice = scotusResults.slice(0, 5);
-    const otherSlice = otherResults.slice(0, 10);
-
-    console.log(`Prioritized: ${scotusSlice.length} SCOTUS + ${otherSlice.length} other = ${scotusSlice.length + otherSlice.length} total`);
-    return [...scotusSlice, ...otherSlice];
+    const total = [...scotusSlice, ...highProfileSlice, ...otherSlice];
+    console.log(`Prioritized: ${scotusSlice.length} SCOTUS + ${highProfileSlice.length} HighProfile + ${otherSlice.length} other = ${total.length} total`);
+    return total;
 }
 
 function getCourtType(courtId) {
     if (SCOTUS_COURTS.includes(courtId)) return 'scotus';
     if (CIRCUIT_COURTS.includes(courtId)) return 'federal_appeals';
     if (STATE_SUPREME_COURTS.includes(courtId)) return 'state_supreme';
+    // District courts and others
+    if (courtId && (courtId.includes('d') || courtId.startsWith('nh') || courtId.startsWith('pr'))) return 'district';
     return 'federal_appeals';
 }
 
