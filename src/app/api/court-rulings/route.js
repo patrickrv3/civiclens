@@ -101,7 +101,7 @@ async function cacheSummary(id, data) {
 
 async function checkRateLimitCache() {
     try {
-        const ref = doc(db, 'billSummaries', '_court_rate_limit_');
+        const ref = doc(db, 'billSummaries', '_court_rate_limit_v2_');
         const snap = await getDoc(ref);
         if (!snap.exists()) return { shouldSkip: false, cachedIds: [] };
         const data = snap.data();
@@ -234,9 +234,7 @@ function getCourtType(courtId) {
     if (SCOTUS_COURTS.includes(courtId)) return 'scotus';
     if (CIRCUIT_COURTS.includes(courtId)) return 'federal_appeals';
     if (STATE_SUPREME_COURTS.includes(courtId)) return 'state_supreme';
-    // District courts and others
-    if (courtId && (courtId.includes('d') || courtId.startsWith('nh') || courtId.startsWith('pr'))) return 'district';
-    return 'federal_appeals';
+    return 'district'; // Anything not in the above lists is a district/other court
 }
 
 function getCourtName(courtId, rawCourtName) {
