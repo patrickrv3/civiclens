@@ -224,6 +224,7 @@ export async function POST(request) {
         const { shouldSkip, cachedIds } = await checkRateLimitCache();
 
         let opinionsForProcessing = [];
+        let returnedEarly = false;
 
         if (shouldSkip && cachedIds.length > 0) {
             // Use cached ruling IDs — resolve them from billSummaries cache
@@ -231,6 +232,7 @@ export async function POST(request) {
                 cachedIds.map(id => getCachedSummary(id))
             );
             const validCached = cachedResults.filter(Boolean);
+            console.log(`Rate limit: shouldSkip=${shouldSkip}, cachedIds=${cachedIds.length}, validCached=${validCached.length}`);
 
             if (validCached.length > 0) {
                 // All items are already cached, return them directly
@@ -239,8 +241,8 @@ export async function POST(request) {
                 ).length;
                 return NextResponse.json({ items: validCached, scotusCount });
             }
-
-            // Cached IDs exist but summaries expired — fall through to re-fetch
+            // Cached IDs exist but summaries expired or missing — must re-fetch
+            console.log('Rate limit cache had IDs but summaries missing, re-fetching...');
         }
 
         // Step 2: Fetch from CourtListener
@@ -323,14 +325,13 @@ export async function POST(request) {
             });
         }
 
-        // Step 5: Merge cached + AI results preserving order
-        const allById = new Map();
-        [...cachedItems, ...aiItems].forEach(item => {
-            if (item.id) allById.set(item.id, item);
-        });
-        const items = opinionsForProcessing
-            .map(o => allById.get(o.id))
-            .filter(Boolean);
+        // Step 5: Combine cached + AI results
+        const items = [...cachedItems, ...aiItems];
+
+        // Sort by date descending
+        items.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+        console.log(`Court rulings final: ${items.length} items (${cachedItems.length} cached + ${aiItems.length} AI)`);
 
         // Count SCOTUS rulings for frontend free-tier filtering
         const scotusCount = items.filter(
