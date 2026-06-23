@@ -18,7 +18,6 @@ const db = getFirestore(app);
 
 const CACHE_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
 const RATE_LIMIT_MS = 6 * 60 * 60 * 1000; // 6 hours between CourtListener fetches
-const MAX_OPINIONS = 8; // Cap to stay within Vercel 60s timeout
 
 // CourtListener court IDs
 const SCOTUS_COURTS = ['scotus'];
@@ -26,24 +25,31 @@ const CIRCUIT_COURTS = [
     'ca1', 'ca2', 'ca3', 'ca4', 'ca5', 'ca6', 'ca7', 'ca8',
     'ca9', 'ca10', 'ca11', 'cadc', 'cafc',
 ];
-const ALL_COURTS = [...SCOTUS_COURTS, ...CIRCUIT_COURTS];
+// Major state supreme courts
+const STATE_SUPREME_COURTS = [
+    'cal', 'ny', 'tex', 'fla', 'ill', 'pa', 'ohio', 'ga', 'nc', 'mich',
+    'nj', 'va', 'wash', 'mass', 'ariz', 'colo', 'minn', 'wis', 'md', 'ind',
+];
 
 // Human-readable court name mapping
 const COURT_NAME_MAP = {
     scotus: 'Supreme Court',
-    ca1: '1st Circuit',
-    ca2: '2nd Circuit',
-    ca3: '3rd Circuit',
-    ca4: '4th Circuit',
-    ca5: '5th Circuit',
-    ca6: '6th Circuit',
-    ca7: '7th Circuit',
-    ca8: '8th Circuit',
-    ca9: '9th Circuit',
-    ca10: '10th Circuit',
-    ca11: '11th Circuit',
-    cadc: 'D.C. Circuit',
-    cafc: 'Federal Circuit',
+    ca1: '1st Circuit', ca2: '2nd Circuit', ca3: '3rd Circuit',
+    ca4: '4th Circuit', ca5: '5th Circuit', ca6: '6th Circuit',
+    ca7: '7th Circuit', ca8: '8th Circuit', ca9: '9th Circuit',
+    ca10: '10th Circuit', ca11: '11th Circuit',
+    cadc: 'D.C. Circuit', cafc: 'Federal Circuit',
+    // State supreme courts
+    cal: 'California Supreme Court', ny: 'New York Court of Appeals',
+    tex: 'Texas Supreme Court', fla: 'Florida Supreme Court',
+    ill: 'Illinois Supreme Court', pa: 'Pennsylvania Supreme Court',
+    ohio: 'Ohio Supreme Court', ga: 'Georgia Supreme Court',
+    nc: 'North Carolina Supreme Court', mich: 'Michigan Supreme Court',
+    nj: 'New Jersey Supreme Court', va: 'Virginia Supreme Court',
+    wash: 'Washington Supreme Court', mass: 'Massachusetts Supreme Judicial Court',
+    ariz: 'Arizona Supreme Court', colo: 'Colorado Supreme Court',
+    minn: 'Minnesota Supreme Court', wis: 'Wisconsin Supreme Court',
+    md: 'Maryland Court of Appeals', ind: 'Indiana Supreme Court',
 };
 
 const SYSTEM_PROMPT = `You are an expert, neutral, nonpartisan civic analyst specializing in court rulings.
@@ -57,7 +63,7 @@ For each ruling, provide:
 - profileLevel: One of "High Profile", "Notable", or "Routine" based on these criteria:
   * "High Profile": Constitutional rights (1st, 2nd, 4th, 14th Amendment), immigration/asylum/deportation, executive power/separation of powers, abortion/reproductive rights, voting rights, gun control, LGBTQ+ rights, cases involving government agencies, cases overturning precedent, cases widely covered in media, district court rulings blocking government policy.
   * "Notable": Significant legal precedent but not front-page news.
-  * "Routine": Standard legal proceedings.
+  * "Routine": Standard legal proceedings, routine patent disputes, procedural matters.
 - topics: An array of relevant topic strings from this list: "Immigration", "First Amendment", "Executive Power", "Civil Rights", "Voting Rights", "Criminal Justice", "Environment", "Healthcare", "Gun Rights", "Labor", "Technology", "Education". Only include genuinely relevant topics.
 - court: The human-readable court name provided.
 - courtType: The court type provided (one of "scotus", "federal_appeals", "state_supreme", "district").
@@ -93,10 +99,6 @@ async function cacheSummary(id, data) {
     }
 }
 
-/**
- * Check if we should skip the CourtListener API call and return cached ruling IDs.
- * Returns { shouldSkip: boolean, cachedIds: string[] }
- */
 async function checkRateLimitCache() {
     try {
         const ref = doc(db, 'billSummaries', '_court_rate_limit_');
@@ -113,9 +115,6 @@ async function checkRateLimitCache() {
     }
 }
 
-/**
- * Save the list of ruling IDs + timestamp for rate limiting.
- */
 async function saveRateLimitCache(rulingIds) {
     try {
         await setDoc(doc(db, 'billSummaries', '_court_rate_limit_'), {
@@ -128,84 +127,87 @@ async function saveRateLimitCache(rulingIds) {
 }
 
 /**
- * Fetch opinions from CourtListener Search API.
+ * Fetch opinions from CourtListener. Makes separate queries for SCOTUS and other courts
+ * to ensure SCOTUS opinions are always included.
  */
 async function fetchFromCourtListener() {
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-    const filedAfter = ninetyDaysAgo.toISOString().split('T')[0]; // YYYY-MM-DD
+    const filedAfter = ninetyDaysAgo.toISOString().split('T')[0];
 
-    const params = new URLSearchParams();
-    params.append('type', 'o');
-    params.append('order_by', 'dateFiled desc');
-    params.append('filed_after', filedAfter);
+    const fetchWithCourts = async (courts, label) => {
+        const params = new URLSearchParams();
+        params.append('type', 'o');
+        params.append('order_by', 'dateFiled desc');
+        params.append('filed_after', filedAfter);
+        courts.forEach(court => params.append('court', court));
 
-    // Add each court as a separate param
-    ALL_COURTS.forEach(court => params.append('court', court));
+        const url = `https://www.courtlistener.com/api/rest/v4/search/?${params.toString()}`;
+        console.log(`CourtListener ${label} URL:`, url);
 
-    const url = `https://www.courtlistener.com/api/rest/v4/search/?${params.toString()}`;
-    console.log('CourtListener fetch URL:', url);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
-
-    try {
-        const res = await fetch(url, {
-            headers: {
-                Authorization: `Token ${process.env.COURTLISTENER_API_TOKEN}`,
-            },
-            signal: controller.signal,
-        });
-        clearTimeout(timeout);
-
-        if (!res.ok) {
-            const errText = await res.text();
-            console.error(`CourtListener API error: ${res.status} - ${errText.substring(0, 200)}`);
-            throw new Error(`CourtListener API error: ${res.status}`);
+        try {
+            const res = await fetch(url, {
+                headers: { Authorization: `Token ${process.env.COURTLISTENER_API_TOKEN}` },
+                signal: controller.signal,
+            });
+            clearTimeout(timeout);
+            if (!res.ok) {
+                console.error(`CourtListener ${label} error: ${res.status}`);
+                return [];
+            }
+            const data = await res.json();
+            console.log(`CourtListener ${label}: ${(data.results || []).length} results`);
+            return data.results || [];
+        } catch (err) {
+            clearTimeout(timeout);
+            console.error(`CourtListener ${label} failed:`, err.message);
+            return [];
         }
+    };
 
-        const data = await res.json();
-        console.log(`CourtListener returned ${(data.results || []).length} opinions`);
-        return data.results || [];
-    } catch (err) {
-        clearTimeout(timeout);
-        if (err.name === 'AbortError') {
-            console.error('CourtListener fetch timed out after 15s');
-            throw new Error('CourtListener API timeout');
-        }
-        throw err;
-    }
+    // Fetch SCOTUS and other courts in parallel
+    const [scotusResults, circuitResults, stateResults] = await Promise.all([
+        fetchWithCourts(SCOTUS_COURTS, 'SCOTUS'),
+        fetchWithCourts(CIRCUIT_COURTS, 'Circuits'),
+        fetchWithCourts(STATE_SUPREME_COURTS, 'State Supreme'),
+    ]);
+
+    // Prioritize: all SCOTUS first, then mix circuits + state by date
+    const otherResults = [...circuitResults, ...stateResults]
+        .sort((a, b) => (b.dateFiled || '').localeCompare(a.dateFiled || ''));
+
+    // Take up to 5 SCOTUS + up to 10 other courts = max 15
+    const scotusSlice = scotusResults.slice(0, 5);
+    const otherSlice = otherResults.slice(0, 10);
+
+    console.log(`Prioritized: ${scotusSlice.length} SCOTUS + ${otherSlice.length} other = ${scotusSlice.length + otherSlice.length} total`);
+    return [...scotusSlice, ...otherSlice];
 }
 
-/**
- * Determine court type from court ID.
- */
 function getCourtType(courtId) {
     if (SCOTUS_COURTS.includes(courtId)) return 'scotus';
     if (CIRCUIT_COURTS.includes(courtId)) return 'federal_appeals';
-    return 'federal_appeals'; // fallback for included courts
+    if (STATE_SUPREME_COURTS.includes(courtId)) return 'state_supreme';
+    return 'federal_appeals';
 }
 
-/**
- * Get human-readable court name.
- */
 function getCourtName(courtId, rawCourtName) {
     return COURT_NAME_MAP[courtId] || rawCourtName || courtId;
 }
 
-/**
- * Shape a raw CourtListener result into our processing format.
- */
 function shapeOpinion(opinion) {
     const courtId = opinion.court_id || '';
     const courtType = getCourtType(courtId);
     const courtName = getCourtName(courtId, opinion.court);
-    const level = courtId.startsWith('state') ? 'State' : 'Federal';
+    const level = STATE_SUPREME_COURTS.includes(courtId) ? 'State' : 'Federal';
     const absoluteUrl = opinion.absolute_url
         ? `https://www.courtlistener.com${opinion.absolute_url}`
         : '';
 
     return {
-        id: `court-${opinion.id || opinion.cluster_id || opinion.docket_id || Date.now()}`,
+        id: `court-${opinion.cluster_id || opinion.id || opinion.docket_id || Date.now()}`,
         caseName: opinion.caseName || opinion.case_name || '',
         court: courtName,
         courtType,
@@ -223,46 +225,34 @@ export async function POST(request) {
     try {
         const { lifeTags, interests } = await request.json();
 
-        // Step 1: Check rate limit — should we call CourtListener or use cached IDs?
+        // Step 1: Check rate limit
         const { shouldSkip, cachedIds } = await checkRateLimitCache();
 
-        let opinionsForProcessing = [];
-        let returnedEarly = false;
-
         if (shouldSkip && cachedIds.length > 0) {
-            // Use cached ruling IDs — resolve them from billSummaries cache
             const cachedResults = await Promise.all(
                 cachedIds.map(id => getCachedSummary(id))
             );
             const validCached = cachedResults.filter(Boolean);
-            console.log(`Rate limit: shouldSkip=${shouldSkip}, cachedIds=${cachedIds.length}, validCached=${validCached.length}`);
+            console.log(`Rate limit hit: ${cachedIds.length} IDs, ${validCached.length} valid cached`);
 
             if (validCached.length > 0) {
-                // All items are already cached, return them directly
-                const scotusCount = validCached.filter(
-                    item => item.courtType === 'scotus'
-                ).length;
+                const scotusCount = validCached.filter(i => i.courtType === 'scotus').length;
                 return NextResponse.json({ items: validCached, scotusCount });
             }
-            // Cached IDs exist but summaries expired or missing — must re-fetch
-            console.log('Rate limit cache had IDs but summaries missing, re-fetching...');
+            console.log('Cached IDs found but no valid summaries, re-fetching...');
         }
 
-        // Step 2: Fetch from CourtListener
+        // Step 2: Fetch from CourtListener (SCOTUS + circuits + state, in parallel)
         const rawOpinions = await fetchFromCourtListener();
+        const opinionsForProcessing = rawOpinions.map(shapeOpinion);
 
-        // Shape and limit to MAX_OPINIONS
-        opinionsForProcessing = rawOpinions
-            .slice(0, MAX_OPINIONS)
-            .map(shapeOpinion);
+        console.log(`Shaped ${opinionsForProcessing.length} opinions for processing`);
 
         // Save ruling IDs for rate limiting
         const rulingIds = opinionsForProcessing.map(o => o.id);
-        saveRateLimitCache(rulingIds); // fire-and-forget
+        saveRateLimitCache(rulingIds);
 
-        console.log(`Court rulings: ${opinionsForProcessing.length} shaped, checking cache...`);
-
-        // Step 3: Check Firestore cache in parallel
+        // Step 3: Check Firestore cache
         const cacheResults = await Promise.all(
             opinionsForProcessing.map(o => getCachedSummary(o.id))
         );
@@ -278,15 +268,18 @@ export async function POST(request) {
             }
         });
 
-        // Step 4: Process uncached rulings with OpenAI
+        console.log(`Cache check: ${cachedItems.length} cached, ${uncached.length} need AI`);
+
+        // Step 4: Process uncached rulings with OpenAI (in batches of 8 to avoid timeout)
         let aiItems = [];
-        console.log(`Court rulings: ${cachedItems.length} cached, ${uncached.length} need AI`);
         if (uncached.length > 0) {
+            // Only process up to 10 at once to stay within timeout
+            const batch = uncached.slice(0, 10);
             const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || '' });
             const interestsText = interests?.length
                 ? `\n\nThe user is interested in: ${interests.join(', ')}.`
                 : '';
-            const userPrompt = `Analyze these court rulings and generate tagImpacts for Life Tags: ${(lifeTags || []).join(', ') || 'None'}.${interestsText}\n\nRulings:\n${JSON.stringify(uncached, null, 2)}`;
+            const userPrompt = `Analyze these court rulings and generate tagImpacts for Life Tags: ${(lifeTags || []).join(', ') || 'None'}.${interestsText}\n\nRulings:\n${JSON.stringify(batch, null, 2)}`;
 
             const completion = await openai.chat.completions.create({
                 model: 'gpt-4o-mini',
@@ -330,16 +323,15 @@ export async function POST(request) {
 
         // Step 5: Combine cached + AI results
         const items = [...cachedItems, ...aiItems];
+        items.sort((a, b) => {
+            // SCOTUS always first, then by date
+            if (a.courtType === 'scotus' && b.courtType !== 'scotus') return -1;
+            if (a.courtType !== 'scotus' && b.courtType === 'scotus') return 1;
+            return (b.date || '').localeCompare(a.date || '');
+        });
 
-        // Sort by date descending
-        items.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-
-        console.log(`Court rulings final: ${items.length} items (${cachedItems.length} cached + ${aiItems.length} AI)`);
-
-        // Count SCOTUS rulings for frontend free-tier filtering
-        const scotusCount = items.filter(
-            item => item.courtType === 'scotus'
-        ).length;
+        const scotusCount = items.filter(i => i.courtType === 'scotus').length;
+        console.log(`Final: ${items.length} items (${scotusCount} SCOTUS)`);
 
         return NextResponse.json({ items, scotusCount });
 
