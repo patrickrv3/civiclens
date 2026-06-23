@@ -112,7 +112,7 @@ export default function FeedCard({ item, profile }) {
     // Determine badge class dynamically
     let badgeClass = styles.badgeBill;
     if (item.type === 'Executive Order' || item.type === 'Executive') badgeClass = styles.badgeExecutive;
-    if (item.type === 'Court') badgeClass = styles.badgeCourt;
+    if (item.type === 'Court Ruling' || item.type === 'Court') badgeClass = styles.badgeCourt;
     if (item.type === 'Law') badgeClass = styles.badgeLaw;
 
     return (
@@ -133,7 +133,18 @@ export default function FeedCard({ item, profile }) {
                 }}>
                     <AlertCircleIcon /> {item.impactLevel}
                 </div>
+                {item.profileLevel === 'High Profile' && (
+                    <div className={styles.highProfileBadge}>
+                        🔥 High Profile
+                    </div>
+                )}
             </div>
+
+            {item.court && (
+                <div style={{ marginBottom: '4px', fontSize: '0.75rem', color: '#6b7280', fontWeight: 500 }}>
+                    ⚖️ {item.court}
+                </div>
+            )}
 
             {item.status && (() => {
                 const statusColors = {
@@ -144,6 +155,17 @@ export default function FeedCard({ item, profile }) {
                     'Passed Both Chambers': { bg: '#fce7f3', color: '#be185d' },
                     'Signed into Law': { bg: '#dcfce7', color: '#16a34a' },
                     'Failed': { bg: '#fee2e2', color: '#dc2626' },
+                    // Court ruling statuses
+                    'Affirmed': { bg: '#dcfce7', color: '#16a34a' },
+                    'Reversed': { bg: '#fee2e2', color: '#dc2626' },
+                    'Reversed and Remanded': { bg: '#fee2e2', color: '#dc2626' },
+                    'Remanded': { bg: '#fef3c7', color: '#d97706' },
+                    'Vacated': { bg: '#fce7f3', color: '#be185d' },
+                    'Dismissed': { bg: '#f3f4f6', color: '#4b5563' },
+                    'Overruled': { bg: '#fee2e2', color: '#dc2626' },
+                    'Upheld': { bg: '#dcfce7', color: '#16a34a' },
+                    'Injunction Granted': { bg: '#fef3c7', color: '#d97706' },
+                    'Injunction Denied': { bg: '#f3f4f6', color: '#4b5563' },
                 };
                 const sc = statusColors[item.status] || statusColors['Introduced'];
                 return (

@@ -7,6 +7,7 @@ import OnboardingModal from './OnboardingModal';
 import AIAssistant from './AIAssistant';
 import Representatives from './Representatives';
 import Elections from './Elections';
+import CourtRulings from './CourtRulings';
 import Settings from './Settings';
 import AuthModal from './AuthModal';
 import NotificationPanel from './NotificationPanel';
@@ -78,12 +79,18 @@ const Icons = {
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
         </svg>
     ),
+    rulings: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /><path d="M8 2l1.5 1.5" /><path d="M16 2l-1.5 1.5" /><path d="M4.5 7.5L3 7" /><path d="M19.5 7.5L21 7" />
+        </svg>
+    ),
 };
 
 const navItems = [
     { id: 'feed', label: 'My Feed', icon: Icons.feed },
     { id: 'assistant', label: 'AI Assistant', icon: Icons.assistant },
     { id: 'reps', label: 'Representatives', icon: Icons.reps },
+    { id: 'rulings', label: 'Court Rulings', icon: Icons.rulings },
     { id: 'elections', label: 'Elections & Actions', icon: Icons.elections },
 ];
 
@@ -310,6 +317,8 @@ export default function AppShell({ children }) {
                                 <AIAssistant initialQuestion={askAIQuestion} onQuestionConsumed={() => setAskAIQuestion(null)} />
                             ) : activePage === 'reps' ? (
                                 <Representatives />
+                            ) : activePage === 'rulings' ? (
+                                <CourtRulings />
                             ) : activePage === 'elections' ? (
                                 <Elections />
                             ) : activePage === 'settings' ? (
