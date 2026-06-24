@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import styles from './CourtRulings.module.css';
 import FeedCard from './FeedCard';
 import { useProfile } from '../context/ProfileContext';
@@ -12,6 +12,8 @@ const TOPIC_OPTIONS = [
     'Voting Rights', 'Criminal Justice', 'Environment', 'Healthcare',
     'Gun Rights', 'Labor', 'Technology', 'Education',
 ];
+
+const PAGE_SIZE = 10;
 
 export default function CourtRulings() {
     const { profile } = useProfile();
@@ -25,6 +27,9 @@ export default function CourtRulings() {
     const [topicFilter, setTopicFilter] = useState('all');
     const [sortBy, setSortBy] = useState('recent');
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+    const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+    const sentinelRef = useRef(null);
 
     const isNative = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
     const canSeeAll = isPro || isNative;
@@ -57,26 +62,21 @@ export default function CourtRulings() {
         fetchRulings();
     }, [profile.lifeTags, profile.interests]);
 
-    const handleCourtFilter = (court) => {
-        setCourtFilter(court);
-    };
+    // Reset visible count when filters change
+    useEffect(() => {
+        setVisibleCount(PAGE_SIZE);
+    }, [profileFilter, courtFilter, topicFilter, sortBy]);
 
     // Apply filters and sorting
     const filteredRulings = rulings
         .filter(item => {
-            // Profile filter
             if (profileFilter === 'high-profile' && item.profileLevel !== 'High Profile') return false;
             if (profileFilter === 'notable' && item.profileLevel !== 'Notable') return false;
-
-            // Court filter
             if (courtFilter !== 'all' && item.courtType !== courtFilter) return false;
-
-            // Topic filter
             if (topicFilter !== 'all') {
                 const topics = item.topics || [];
                 if (!topics.includes(topicFilter)) return false;
             }
-
             return true;
         })
         .sort((a, b) => {
@@ -84,9 +84,41 @@ export default function CourtRulings() {
                 const impactOrder = { 'High Impact': 0, 'Moderate Impact': 1, 'Low Impact': 2 };
                 return (impactOrder[a.impactLevel] ?? 2) - (impactOrder[b.impactLevel] ?? 2);
             }
-            // Default: most recent first
             return (b.date || '').localeCompare(a.date || '');
         });
+
+    const visibleRulings = filteredRulings.slice(0, visibleCount);
+    const hasMore = visibleCount < filteredRulings.length;
+
+    // Count items per court for badges
+    const courtCounts = {
+        all: rulings.length,
+        scotus: rulings.filter(r => r.courtType === 'scotus').length,
+        federal_appeals: rulings.filter(r => r.courtType === 'federal_appeals').length,
+        district: rulings.filter(r => r.courtType === 'district').length,
+    };
+
+    // Infinite scroll with IntersectionObserver
+    const loadMore = useCallback(() => {
+        setVisibleCount(prev => prev + PAGE_SIZE);
+    }, []);
+
+    useEffect(() => {
+        const sentinel = sentinelRef.current;
+        if (!sentinel) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting && hasMore) {
+                    loadMore();
+                }
+            },
+            { rootMargin: '200px' }
+        );
+
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+    }, [hasMore, loadMore]);
 
     return (
         <div className={styles.container}>
@@ -130,9 +162,12 @@ export default function CourtRulings() {
                         <button
                             key={f.id}
                             className={`${styles.filterPill} ${courtFilter === f.id ? styles.filterPillActive : ''}`}
-                            onClick={() => handleCourtFilter(f.id)}
+                            onClick={() => setCourtFilter(f.id)}
                         >
                             {f.label}
+                            {courtCounts[f.id] > 0 && (
+                                <span className={styles.countBadge}>{courtCounts[f.id]}</span>
+                            )}
                         </button>
                     ))}
                 </div>
@@ -171,8 +206,6 @@ export default function CourtRulings() {
                 </div>
             </div>
 
-
-
             {/* Loading State */}
             {isLoading && (
                 <div className={styles.loadingContainer}>
@@ -202,11 +235,26 @@ export default function CourtRulings() {
             )}
 
             {/* Rulings List */}
-            {!isLoading && !error && filteredRulings.length > 0 && (
+            {!isLoading && !error && visibleRulings.length > 0 && (
                 <div className={styles.rulingsList}>
-                    {filteredRulings.map(item => (
+                    {visibleRulings.map(item => (
                         <FeedCard key={item.id} item={item} profile={profile} />
                     ))}
+
+                    {/* Infinite scroll sentinel */}
+                    {hasMore && (
+                        <div ref={sentinelRef} className={styles.loadMoreSentinel}>
+                            <div className={styles.spinner} />
+                            <span className={styles.loadingText}>Loading more rulings...</span>
+                        </div>
+                    )}
+
+                    {/* End of list indicator */}
+                    {!hasMore && filteredRulings.length > PAGE_SIZE && (
+                        <div className={styles.endOfList}>
+                            Showing all {filteredRulings.length} rulings
+                        </div>
+                    )}
                 </div>
             )}
 

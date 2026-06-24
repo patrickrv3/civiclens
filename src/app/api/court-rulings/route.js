@@ -16,38 +16,15 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const db = getFirestore(app);
 
-const CACHE_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
-const RATE_LIMIT_MS = 6 * 60 * 60 * 1000;
-const PAGE_SIZE = 10;
+const CACHE_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours for individual summaries
+const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours between CourtListener fetches
+const MAX_PER_COURT = 50; // Rolling window: keep top 50 per court
 
 // Court lists
 const SCOTUS_COURTS = ['scotus'];
 const CIRCUIT_COURTS = [
     'ca1', 'ca2', 'ca3', 'ca4', 'ca5', 'ca6', 'ca7', 'ca8',
     'ca9', 'ca10', 'ca11', 'cadc', 'cafc',
-];
-// Top federal district courts (most active for high-profile rulings)
-const DISTRICT_COURTS = [
-    'dcd',    // D.C. — executive power, immigration, federal agency cases
-    'nysd',   // Southern District of NY — financial, civil rights
-    'nyed',   // Eastern District of NY
-    'cacd',   // Central District of CA — immigration, tech
-    'cand',   // Northern District of CA — tech, civil rights
-    'casd',   // Southern District of CA — border/immigration
-    'txsd',   // Southern District of TX — immigration, border
-    'txnd',   // Northern District of TX — executive orders, gun rights
-    'txed',   // Eastern District of TX — patent, tech
-    'txwd',   // Western District of TX — immigration
-    'flsd',   // Southern District of FL — various
-    'flmd',   // Middle District of FL
-    'ilnd',   // Northern District of IL — civil rights
-    'paed',   // Eastern District of PA
-    'mad',    // District of MA
-    'mdd',    // District of MD
-    'vaed',   // Eastern District of VA
-    'gand',   // Northern District of GA — voting rights
-    'cod',    // District of CO
-    'azd',    // District of AZ — immigration
 ];
 
 const COURT_NAME_MAP = {
@@ -57,14 +34,7 @@ const COURT_NAME_MAP = {
     ca7: '7th Circuit', ca8: '8th Circuit', ca9: '9th Circuit',
     ca10: '10th Circuit', ca11: '11th Circuit',
     cadc: 'D.C. Circuit', cafc: 'Federal Circuit',
-    dcd: 'D.C. District', nysd: 'S.D.N.Y.', nyed: 'E.D.N.Y.',
-    cacd: 'C.D. Cal.', cand: 'N.D. Cal.', casd: 'S.D. Cal.',
-    txsd: 'S.D. Tex.', txnd: 'N.D. Tex.', txed: 'E.D. Tex.', txwd: 'W.D. Tex.',
-    flsd: 'S.D. Fla.', flmd: 'M.D. Fla.',
-    ilnd: 'N.D. Ill.', paed: 'E.D. Pa.',
-    mad: 'D. Mass.', mdd: 'D. Md.',
-    vaed: 'E.D. Va.', gand: 'N.D. Ga.',
-    cod: 'D. Colo.', azd: 'D. Ariz.',
+    dcd: 'D.C. District',
 };
 
 const SYSTEM_PROMPT = `You are an expert, neutral, nonpartisan civic analyst specializing in court rulings.
@@ -110,22 +80,34 @@ async function cacheSummary(id, data) {
     catch (e) { console.warn('Cache write failed:', e.message); }
 }
 
-async function getRateLimitCache() {
+// ── Per-court rolling cache ──
+
+const COURT_CACHE_KEYS = {
+    scotus: '_court_cache_scotus_v1_',
+    federal_appeals: '_court_cache_appeals_v1_',
+    district: '_court_cache_district_v1_',
+};
+
+async function getCourtCache(courtType) {
     try {
-        const snap = await getDoc(doc(db, 'billSummaries', '_court_rl_v18_'));
-        if (!snap.exists()) return null;
+        const key = COURT_CACHE_KEYS[courtType];
+        if (!key) return { ids: [], fetchedAt: 0 };
+        const snap = await getDoc(doc(db, 'billSummaries', key));
+        if (!snap.exists()) return { ids: [], fetchedAt: 0 };
         const data = snap.data();
-        if (Date.now() - (data.fetchedAt || 0) > RATE_LIMIT_MS) return null;
-        return data.rulingIds || [];
-    } catch { return null; }
+        return { ids: data.ids || [], fetchedAt: data.fetchedAt || 0 };
+    } catch { return { ids: [], fetchedAt: 0 }; }
 }
 
-async function saveRateLimitCache(rulingIds) {
+async function saveCourtCache(courtType, ids) {
     try {
-        await setDoc(doc(db, 'billSummaries', '_court_rl_v18_'), {
-            rulingIds, fetchedAt: Date.now(),
+        const key = COURT_CACHE_KEYS[courtType];
+        if (!key) return;
+        await setDoc(doc(db, 'billSummaries', key), {
+            ids: ids.slice(0, MAX_PER_COURT),
+            fetchedAt: Date.now(),
         });
-    } catch (e) { console.warn('Rate limit save failed:', e.message); }
+    } catch (e) { console.warn(`Court cache save failed (${courtType}):`, e.message); }
 }
 
 // ── CourtListener fetch ──
@@ -140,49 +122,22 @@ async function fetchCL(url, label) {
             signal: controller.signal,
         });
         clearTimeout(timeout);
-        if (!res.ok) { console.error(`[CL] ${label} error: ${res.status}`); return { results: [], next: null }; }
+        if (!res.ok) { console.error(`[CL] ${label} error: ${res.status}`); return []; }
         const data = await res.json();
-        console.log(`[CL] ${label}: ${(data.results || []).length} results (of ${data.count || '?'} total)`);
-        return { results: data.results || [], next: data.next || null };
+        console.log(`[CL] ${label}: ${(data.results || []).length} results`);
+        return data.results || [];
     } catch (err) {
         clearTimeout(timeout);
         console.error(`[CL] ${label} failed:`, err.message);
-        return { results: [], next: null };
+        return [];
     }
 }
 
 /**
- * Fetch multiple pages from CourtListener, following cursor links.
- * Stops when we have enough results or run out of pages.
+ * Fetch latest 20 opinions per court (3 parallel API calls).
+ * Returns { scotus: [...], appeals: [...], district: [...] }
  */
-async function fetchCLPages(params, label, minResults = 20, maxPages = 4) {
-    const firstUrl = `https://www.courtlistener.com/api/rest/v4/search/?${params.toString()}`;
-    let allResults = [];
-    let nextUrl = firstUrl;
-    let page = 0;
-
-    while (nextUrl && page < maxPages && allResults.length < minResults) {
-        const { results, next } = await fetchCL(nextUrl, `${label} p${page + 1}`);
-        allResults.push(...results);
-        nextUrl = next;
-        page++;
-        if (nextUrl && allResults.length < minResults) {
-            await new Promise(r => setTimeout(r, 1000)); // delay between pages
-        }
-    }
-
-    console.log(`[CL] ${label} total: ${allResults.length} results across ${page} page(s)`);
-    return allResults;
-}
-
-/**
- * Fetch 50 opinions with 3 PARALLEL API calls (~3 seconds):
- *   1. SCOTUS (20 results)
- *   2. Circuit courts (20 results)
- *   3. D.C. District Court (20 results)
- * All 3 fire simultaneously — faster and avoids sequential timeout issues.
- */
-async function fetchAll50() {
+async function fetchLatest() {
     const filedAfter = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
         .toISOString().split('T')[0];
 
@@ -195,68 +150,17 @@ async function fetchAll50() {
         return `https://www.courtlistener.com/api/rest/v4/search/?${p.toString()}`;
     };
 
-    // Fire all 3 in parallel
     const [scotusRes, appealsRes, districtRes] = await Promise.allSettled([
         fetchCL(makeUrl(SCOTUS_COURTS), 'SCOTUS'),
         fetchCL(makeUrl(CIRCUIT_COURTS), 'Appeals'),
         fetchCL(makeUrl(['dcd']), 'DC-District'),
     ]);
 
-    const scotusRaw = scotusRes.status === 'fulfilled' ? scotusRes.value.results : [];
-    const appealsRaw = appealsRes.status === 'fulfilled' ? appealsRes.value.results : [];
-    const districtRaw = districtRes.status === 'fulfilled' ? districtRes.value.results : [];
-
-    console.log(`[Raw] SCOTUS=${scotusRaw.length} Appeals=${appealsRaw.length} District=${districtRaw.length}`);
-    if (scotusRes.status === 'rejected') console.error('[SCOTUS failed]', scotusRes.reason);
-    if (appealsRes.status === 'rejected') console.error('[Appeals failed]', appealsRes.reason);
-    if (districtRes.status === 'rejected') console.error('[District failed]', districtRes.reason);
-
-    // Deduplicate
-    const seen = new Set();
-    const dedup = (arr) => arr.filter(r => {
-        const k = r.cluster_id || r.id || r.docket_id;
-        if (seen.has(k)) return false;
-        seen.add(k);
-        return true;
-    });
-
-    const scotus = dedup(scotusRaw);
-    const appeals = dedup(appealsRaw);
-    const district = dedup(districtRaw);
-
-    const byDate = (a, b) => (b.dateFiled || '').localeCompare(a.dateFiled || '');
-    scotus.sort(byDate);
-    appeals.sort(byDate);
-    district.sort(byDate);
-
-    console.log(`[Buckets] SCOTUS=${scotus.length} Appeals=${appeals.length} District=${district.length}`);
-
-    // Smart distribution: 15 + 15 + 20 = 50
-    const sTake = scotus.slice(0, 15);
-    const aTake = appeals.slice(0, 15);
-    const dTake = district.slice(0, 20);
-
-    // Redistribute unused slots
-    let leftover = (15 - sTake.length) + (15 - aTake.length) + (20 - dTake.length);
-    const extras = [];
-    if (leftover > 0) {
-        const pools = [
-            { arr: district.slice(dTake.length), label: 'district' },
-            { arr: appeals.slice(aTake.length), label: 'appeals' },
-            { arr: scotus.slice(sTake.length), label: 'scotus' },
-        ];
-        for (const pool of pools) {
-            if (leftover <= 0) break;
-            const take = pool.arr.slice(0, leftover);
-            extras.push(...take);
-            leftover -= take.length;
-            if (take.length) console.log(`  +${take.length} from ${pool.label}`);
-        }
-    }
-
-    const selected = [...sTake, ...aTake, ...dTake, ...extras];
-    console.log(`[Distribution] ${sTake.length}S + ${aTake.length}A + ${dTake.length}D + ${extras.length}extra = ${selected.length}`);
-    return selected;
+    return {
+        scotus: (scotusRes.status === 'fulfilled' ? scotusRes.value : []).map(shapeOpinion),
+        appeals: (appealsRes.status === 'fulfilled' ? appealsRes.value : []).map(shapeOpinion),
+        district: (districtRes.status === 'fulfilled' ? districtRes.value : []).map(shapeOpinion),
+    };
 }
 
 // ── Shape opinion ──
@@ -282,6 +186,25 @@ function shapeOpinion(opinion) {
         suitNature: opinion.suitNature || opinion.suit_nature || '',
         citeCount: opinion.citeCount || opinion.citation_count || 0,
     };
+}
+
+/**
+ * Merge new items into existing cached IDs for a court.
+ * Deduplicates by ID, sorts by date (newest first), keeps top MAX_PER_COURT.
+ * Returns the merged list of IDs and the list of new shaped items that need AI processing.
+ */
+function mergeCourtItems(existingIds, newShaped) {
+    const existingSet = new Set(existingIds);
+    const genuinelyNew = newShaped.filter(item => !existingSet.has(item.id));
+
+    // Combine: new items first (they have date info), then existing IDs
+    // We'll resolve full items later; for now track IDs
+    const allIds = [...new Set([
+        ...newShaped.map(i => i.id),
+        ...existingIds,
+    ])].slice(0, MAX_PER_COURT);
+
+    return { mergedIds: allIds, newItems: genuinelyNew };
 }
 
 // ── AI processing helper ──
@@ -312,93 +235,122 @@ export async function POST(request) {
     try {
         const { lifeTags, interests } = await request.json();
 
-        // Step 1: Try rate limit cache — return ALL items at once
-        const cachedIds = await getRateLimitCache();
+        // Step 1: Check if any court cache needs refreshing
+        const [scotusCache, appealsCache, districtCache] = await Promise.all([
+            getCourtCache('scotus'),
+            getCourtCache('federal_appeals'),
+            getCourtCache('district'),
+        ]);
 
-        if (cachedIds && cachedIds.length >= 10) {
-            const cached = (await Promise.all(cachedIds.map(getCachedSummary))).filter(Boolean);
-            console.log(`[Cache] ${cachedIds.length} ids, ${cached.length} valid summaries`);
+        const now = Date.now();
+        const needsRefresh =
+            (now - scotusCache.fetchedAt > REFRESH_INTERVAL_MS) ||
+            (now - appealsCache.fetchedAt > REFRESH_INTERVAL_MS) ||
+            (now - districtCache.fetchedAt > REFRESH_INTERVAL_MS);
 
-            if (cached.length >= 10) {
-                return NextResponse.json({ items: cached, hasMore: false });
+        let allNewItems = []; // Items that need AI processing
+
+        if (needsRefresh) {
+            console.log('[Refresh] Fetching latest from CourtListener...');
+
+            // Step 2: Fetch latest 20 per court
+            const latest = await fetchLatest();
+            console.log(`[Fetched] SCOTUS=${latest.scotus.length} Appeals=${latest.appeals.length} District=${latest.district.length}`);
+
+            // Step 3: Merge with existing caches
+            const scotusMerge = mergeCourtItems(scotusCache.ids, latest.scotus);
+            const appealsMerge = mergeCourtItems(appealsCache.ids, latest.appeals);
+            const districtMerge = mergeCourtItems(districtCache.ids, latest.district);
+
+            console.log(`[Merge] New items: SCOTUS=${scotusMerge.newItems.length} Appeals=${appealsMerge.newItems.length} District=${districtMerge.newItems.length}`);
+
+            // Collect all genuinely new items for AI processing
+            allNewItems = [
+                ...scotusMerge.newItems,
+                ...appealsMerge.newItems,
+                ...districtMerge.newItems,
+            ];
+
+            // Step 4: AI-process new items (in batches of 17)
+            const courtTypeMap = {};
+            allNewItems.forEach(item => { courtTypeMap[item.id] = item.courtType; });
+
+            if (allNewItems.length > 0) {
+                const BATCH_SIZE = 17;
+                const batches = [];
+                for (let i = 0; i < allNewItems.length; i += BATCH_SIZE) {
+                    batches.push(allNewItems.slice(i, i + BATCH_SIZE));
+                }
+                console.log(`[AI] ${allNewItems.length} new items → ${batches.length} batches of [${batches.map(b => b.length).join(', ')}]`);
+
+                const results = await Promise.all(
+                    batches.map((batch, i) =>
+                        processWithAI(batch, lifeTags, interests)
+                            .then(r => { console.log(`[AI] Batch ${i + 1}: sent ${batch.length}, got ${r.length}`); return r; })
+                            .catch(e => { console.error(`[AI] Batch ${i + 1} failed:`, e.message); return []; })
+                    )
+                );
+                const aiItems = results.flat();
+
+                // Cache each AI result with correct courtType
+                for (const item of aiItems) {
+                    if (item.id) {
+                        cacheSummary(item.id, {
+                            ...item,
+                            courtType: courtTypeMap[item.id] || item.courtType,
+                            sponsors: [], locationMatches: [],
+                            likes: 0, dislikes: 0,
+                        });
+                    }
+                }
             }
-            console.log('[Cache] Not enough valid summaries, re-fetching...');
+
+            // Step 5: Save updated per-court caches
+            await Promise.all([
+                saveCourtCache('scotus', scotusMerge.mergedIds),
+                saveCourtCache('federal_appeals', appealsMerge.mergedIds),
+                saveCourtCache('district', districtMerge.mergedIds),
+            ]);
+        } else {
+            console.log('[Cache] All courts fresh, serving from cache');
         }
 
-        // Step 2: Fetch from CourtListener (2 API calls)
-        const raw = await fetchAll50();
-        const shaped = raw.map(shapeOpinion);
-        console.log(`[Shaped] ${shaped.length} total opinions`);
+        // Step 6: Load all cached summaries from all 3 courts
+        const allIds = [
+            ...scotusCache.ids,
+            ...appealsCache.ids,
+            ...districtCache.ids,
+        ];
 
-        if (shaped.length === 0) {
-            return NextResponse.json({ items: [], hasMore: false });
+        // If we just refreshed, use the updated IDs instead
+        let finalIds = allIds;
+        if (needsRefresh) {
+            // Re-read the caches we just saved (they have updated IDs)
+            const [s, a, d] = await Promise.all([
+                getCourtCache('scotus'),
+                getCourtCache('federal_appeals'),
+                getCourtCache('district'),
+            ]);
+            finalIds = [...s.ids, ...a.ids, ...d.ids];
         }
 
-        // Save all IDs for rate limiting
-        if (shaped.length >= 10) {
-            saveRateLimitCache(shaped.map(o => o.id));
-        }
+        // Deduplicate IDs
+        finalIds = [...new Set(finalIds)];
 
-        // Step 3: Check Firestore cache for each item
-        // Build courtType lookup from shaped data (source of truth)
-        const courtTypeMap = {};
-        shaped.forEach(op => { courtTypeMap[op.id] = op.courtType; });
+        console.log(`[Load] ${finalIds.length} total IDs across all courts`);
 
-        const cacheHits = await Promise.all(shaped.map(o => getCachedSummary(o.id)));
-        const cachedItems = [];
-        const uncached = [];
-        shaped.forEach((op, i) => {
-            if (cacheHits[i]) {
-                // Force courtType from shaped data, not from cache
-                cachedItems.push({ ...cacheHits[i], url: op.url, courtType: op.courtType });
-            } else {
-                uncached.push(op);
+        // Load all summaries from Firestore
+        const summaries = await Promise.all(finalIds.map(getCachedSummary));
+        const items = [];
+        finalIds.forEach((id, i) => {
+            if (summaries[i]) {
+                // Force courtType from the ID pattern
+                const courtType = getCourtTypeFromId(id, summaries[i]);
+                items.push({ ...summaries[i], courtType });
             }
         });
 
-        console.log(`[Cache] ${cachedItems.length} cached, ${uncached.length} need AI`);
-
-        // Step 4: Process ALL uncached with AI
-        // Split into smaller batches (~17 items each) to prevent output truncation
-        let aiItems = [];
-        if (uncached.length > 0) {
-            const BATCH_SIZE = 17;
-            const batches = [];
-            for (let i = 0; i < uncached.length; i += BATCH_SIZE) {
-                batches.push(uncached.slice(i, i + BATCH_SIZE));
-            }
-            console.log(`[AI] ${uncached.length} items → ${batches.length} batches of [${batches.map(b => b.length).join(', ')}]`);
-
-            const results = await Promise.all(
-                batches.map((batch, i) =>
-                    processWithAI(batch, lifeTags, interests)
-                        .then(r => { console.log(`[AI] Batch ${i + 1}: sent ${batch.length}, got ${r.length}`); return r; })
-                        .catch(e => { console.error(`[AI] Batch ${i + 1} failed:`, e.message); return []; })
-                )
-            );
-            aiItems = results.flat();
-
-            // Force courtType from shaped data on AI results too
-            aiItems = aiItems.map(item => ({
-                ...item,
-                courtType: courtTypeMap[item.id] || item.courtType,
-            }));
-
-            // Cache each AI result
-            for (const item of aiItems) {
-                if (item.id) {
-                    cacheSummary(item.id, {
-                        ...item,
-                        sponsors: [], locationMatches: [],
-                        likes: 0, dislikes: 0,
-                    });
-                }
-            }
-        }
-
-        // Step 5: Return ALL items
-        const items = [...cachedItems, ...aiItems];
-        console.log(`[Done] ${items.length} total items (${cachedItems.length} cached + ${aiItems.length} AI)`);
+        console.log(`[Done] ${items.length} valid items returned`);
 
         return NextResponse.json({ items, hasMore: false });
 
@@ -406,4 +358,20 @@ export async function POST(request) {
         console.error('[ERROR]', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
+}
+
+/**
+ * Determine courtType for an item. Uses the court cache membership
+ * as the source of truth, falling back to the stored courtType.
+ */
+function getCourtTypeFromId(id, summary) {
+    // The courtType should already be correctly set when we cached it,
+    // but force it to match the expected frontend values
+    const ct = summary.courtType || '';
+    if (ct === 'scotus' || ct === 'federal_appeals' || ct === 'district') return ct;
+    // Legacy fallback
+    if (ct === 'Supreme Court') return 'scotus';
+    if (ct === 'Federal Appeals') return 'federal_appeals';
+    if (ct === 'District Court') return 'district';
+    return 'district';
 }
