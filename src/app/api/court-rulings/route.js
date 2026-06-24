@@ -81,7 +81,7 @@ async function cacheSummary(id, data) {
 
 async function getRateLimitCache() {
     try {
-        const snap = await getDoc(doc(db, 'billSummaries', '_court_rl_v9_'));
+        const snap = await getDoc(doc(db, 'billSummaries', '_court_rl_v10_'));
         if (!snap.exists()) return null;
         const data = snap.data();
         if (Date.now() - (data.fetchedAt || 0) > RATE_LIMIT_MS) return null;
@@ -91,7 +91,7 @@ async function getRateLimitCache() {
 
 async function saveRateLimitCache(rulingIds) {
     try {
-        await setDoc(doc(db, 'billSummaries', '_court_rl_v9_'), {
+        await setDoc(doc(db, 'billSummaries', '_court_rl_v10_'), {
             rulingIds, fetchedAt: Date.now(),
         });
     } catch (e) { console.warn('Rate limit save failed:', e.message); }
@@ -122,56 +122,73 @@ async function fetchCL(params, label) {
 }
 
 /**
- * Fetch 50 opinions: 15 SCOTUS + 15 Appeals + 20 District (high-profile keyword search).
- * Only 2 API calls: one for SCOTUS+Appeals courts, one for keyword search.
- * If a bucket doesn't fill, redistribute slots to others.
+ * Fetch 50 opinions using 3 sequential queries (with page_size control):
+ *   1. SCOTUS only (page_size=15)
+ *   2. Circuit courts only (page_size=20)
+ *   3. High-profile keyword search for district courts (page_size=25)
+ * 
+ * Each query gets its own dedicated results. Smart redistribution fills
+ * any unused slots from courts with fewer results.
  */
 async function fetchAll50() {
     const filedAfter = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
         .toISOString().split('T')[0];
 
-    // Query 1: SCOTUS + all circuit courts (one request)
+    // Query 1: SCOTUS only (want 15)
     const p1 = new URLSearchParams();
     p1.append('type', 'o');
     p1.append('order_by', 'dateFiled desc');
     p1.append('filed_after', filedAfter);
-    [...SCOTUS_COURTS, ...CIRCUIT_COURTS].forEach(c => p1.append('court', c));
-    const courtsRaw = await fetchCL(p1, 'SCOTUS+Appeals');
+    p1.append('page_size', '15');
+    SCOTUS_COURTS.forEach(c => p1.append('court', c));
+    const scotusRaw = await fetchCL(p1, 'SCOTUS');
 
-    // 1.5s delay to stay under rate limit
+    // 1.5s delay
     await new Promise(r => setTimeout(r, 1500));
 
-    // Query 2: high-profile keyword search (any court, catches district courts)
+    // Query 2: Circuit courts only (want 15)
     const p2 = new URLSearchParams();
     p2.append('type', 'o');
     p2.append('order_by', 'dateFiled desc');
     p2.append('filed_after', filedAfter);
-    p2.append('q',
+    p2.append('page_size', '20');
+    CIRCUIT_COURTS.forEach(c => p2.append('court', c));
+    const appealsRaw = await fetchCL(p2, 'Appeals');
+
+    // 1.5s delay
+    await new Promise(r => setTimeout(r, 1500));
+
+    // Query 3: High-profile keyword search (catches district courts, want 20)
+    const p3 = new URLSearchParams();
+    p3.append('type', 'o');
+    p3.append('order_by', 'dateFiled desc');
+    p3.append('filed_after', filedAfter);
+    p3.append('page_size', '25');
+    p3.append('q',
         '"preliminary injunction" OR "temporary restraining order" OR ' +
         '"unconstitutional" OR "voter rolls" OR "deportation" OR ' +
         '"executive order" OR "struck down" OR "enjoined"'
     );
-    const hpRaw = await fetchCL(p2, 'HighProfile');
+    const districtRaw = await fetchCL(p3, 'HighProfile');
 
-    // Deduplicate
+    // Deduplicate across all sources
     const seen = new Set();
-    const all = [...courtsRaw, ...hpRaw].filter(r => {
+    const dedup = (arr) => arr.filter(r => {
         const k = r.cluster_id || r.id || r.docket_id;
         if (seen.has(k)) return false;
         seen.add(k);
         return true;
     });
 
-    // Categorize
-    const scotus = [], appeals = [], district = [];
-    for (const r of all) {
+    // Dedup in order: SCOTUS first (priority), then appeals, then district
+    const scotus = dedup(scotusRaw);
+    const appeals = dedup(appealsRaw);
+    // For district: exclude anything that's actually SCOTUS or circuit
+    const district = dedup(districtRaw).filter(r => {
         const cid = r.court_id || '';
-        if (SCOTUS_COURTS.includes(cid)) scotus.push(r);
-        else if (CIRCUIT_COURTS.includes(cid)) appeals.push(r);
-        else district.push(r);
-    }
+        return !SCOTUS_COURTS.includes(cid) && !CIRCUIT_COURTS.includes(cid);
+    });
 
-    // Sort each by date
     const byDate = (a, b) => (b.dateFiled || '').localeCompare(a.dateFiled || '');
     scotus.sort(byDate);
     appeals.sort(byDate);
@@ -180,17 +197,14 @@ async function fetchAll50() {
     console.log(`[Buckets] SCOTUS=${scotus.length} Appeals=${appeals.length} District=${district.length}`);
 
     // Smart distribution: 15 + 15 + 20 = 50
-    let sTarget = 15, aTarget = 15, dTarget = 20;
-
-    const sTake = scotus.slice(0, sTarget);
-    const aTake = appeals.slice(0, aTarget);
-    const dTake = district.slice(0, dTarget);
+    const sTake = scotus.slice(0, 15);
+    const aTake = appeals.slice(0, 15);
+    const dTake = district.slice(0, 20);
 
     // Redistribute unused slots
-    let leftover = (sTarget - sTake.length) + (aTarget - aTake.length) + (dTarget - dTake.length);
+    let leftover = (15 - sTake.length) + (15 - aTake.length) + (20 - dTake.length);
     const extras = [];
     if (leftover > 0) {
-        // Pull more from whichever bucket has extras
         const pools = [
             { arr: district.slice(dTake.length), label: 'district' },
             { arr: appeals.slice(aTake.length), label: 'appeals' },
