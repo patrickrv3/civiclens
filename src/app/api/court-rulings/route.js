@@ -81,7 +81,7 @@ async function cacheSummary(id, data) {
 
 async function getRateLimitCache() {
     try {
-        const snap = await getDoc(doc(db, 'billSummaries', '_court_rl_v7_'));
+        const snap = await getDoc(doc(db, 'billSummaries', '_court_rl_v8_'));
         if (!snap.exists()) return null;
         const data = snap.data();
         if (Date.now() - (data.fetchedAt || 0) > RATE_LIMIT_MS) return null;
@@ -91,7 +91,7 @@ async function getRateLimitCache() {
 
 async function saveRateLimitCache(rulingIds) {
     try {
-        await setDoc(doc(db, 'billSummaries', '_court_rl_v7_'), {
+        await setDoc(doc(db, 'billSummaries', '_court_rl_v8_'), {
             rulingIds, fetchedAt: Date.now(),
         });
     } catch (e) { console.warn('Rate limit save failed:', e.message); }
@@ -242,22 +242,15 @@ export async function POST(request) {
         const { lifeTags, interests, page = 1 } = await request.json();
         const offset = (page - 1) * PAGE_SIZE;
 
-        // Step 1: Try rate limit cache
+        // Step 1: Try rate limit cache — return ALL items at once (no pagination)
         const cachedIds = await getRateLimitCache();
 
-        if (cachedIds && cachedIds.length >= 10) {
-            const pageIds = cachedIds.slice(offset, offset + PAGE_SIZE);
-            if (pageIds.length === 0) {
-                return NextResponse.json({ items: [], hasMore: false });
-            }
-            const cached = (await Promise.all(pageIds.map(getCachedSummary))).filter(Boolean);
-            console.log(`[Cache] page=${page} ids=${pageIds.length} valid=${cached.length}`);
+        if (cachedIds && cachedIds.length >= 10 && page === 1) {
+            const cached = (await Promise.all(cachedIds.map(getCachedSummary))).filter(Boolean);
+            console.log(`[Cache] ALL: ${cachedIds.length} ids, ${cached.length} valid`);
 
             if (cached.length > 0) {
-                return NextResponse.json({
-                    items: cached,
-                    hasMore: offset + PAGE_SIZE < cachedIds.length,
-                });
+                return NextResponse.json({ items: cached, hasMore: false });
             }
             // Summaries expired — fall through to re-process
         }

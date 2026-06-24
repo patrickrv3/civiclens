@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import styles from './CourtRulings.module.css';
 import FeedCard from './FeedCard';
 import { useProfile } from '../context/ProfileContext';
@@ -19,86 +19,43 @@ export default function CourtRulings() {
 
     const [rulings, setRulings] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [error, setError] = useState('');
     const [profileFilter, setProfileFilter] = useState('all');
     const [courtFilter, setCourtFilter] = useState('all');
     const [topicFilter, setTopicFilter] = useState('all');
     const [sortBy, setSortBy] = useState('recent');
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-    const [page, setPage] = useState(1);
-    const [hasMore, setHasMore] = useState(false);
 
     const isNative = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
     const canSeeAll = isPro || isNative;
 
-    // Fetch rulings
-    const fetchRulings = async (pageNum = 1, append = false) => {
-        if (append) {
-            setIsLoadingMore(true);
-        } else {
+    // Fetch all rulings on mount
+    useEffect(() => {
+        async function fetchRulings() {
             setIsLoading(true);
-        }
-        setError('');
-        try {
-            const res = await fetch('/api/court-rulings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    lifeTags: profile.lifeTags || [],
-                    interests: profile.interests || [],
-                    page: pageNum,
-                }),
-            });
-            if (!res.ok) throw new Error(`API error: ${res.status}`);
-            const data = await res.json();
-            if (data.error) throw new Error(data.error);
-            if (append) {
-                setRulings(prev => [...prev, ...(data.items || [])]);
-            } else {
+            setError('');
+            try {
+                const res = await fetch('/api/court-rulings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        lifeTags: profile.lifeTags || [],
+                        interests: profile.interests || [],
+                    }),
+                });
+                if (!res.ok) throw new Error(`API error: ${res.status}`);
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
                 setRulings(data.items || []);
+            } catch (err) {
+                console.error('Court rulings fetch error:', err);
+                setError(err.message);
+            } finally {
+                setIsLoading(false);
             }
-            setHasMore(data.hasMore || false);
-            setPage(pageNum);
-        } catch (err) {
-            console.error('Court rulings fetch error:', err);
-            setError(err.message);
-        } finally {
-            setIsLoading(false);
-            setIsLoadingMore(false);
         }
-    };
-
-    // Fetch on mount
-    useEffect(() => {
-        fetchRulings(1, false);
+        fetchRulings();
     }, [profile.lifeTags, profile.interests]);
-
-    const loadingMoreRef = useRef(false);
-    const handleLoadMore = useCallback(() => {
-        if (!loadingMoreRef.current && hasMore && !isLoading) {
-            loadingMoreRef.current = true;
-            fetchRulings(page + 1, true).finally(() => {
-                loadingMoreRef.current = false;
-            });
-        }
-    }, [page, hasMore, isLoading]);
-
-    // Infinite scroll: observe sentinel div at bottom
-    const sentinelRef = useRef(null);
-    useEffect(() => {
-        if (!sentinelRef.current) return;
-        const observer = new IntersectionObserver(
-            (entries) => {
-                if (entries[0].isIntersecting && hasMore && !isLoadingMore && !isLoading) {
-                    handleLoadMore();
-                }
-            },
-            { threshold: 0.1 }
-        );
-        observer.observe(sentinelRef.current);
-        return () => observer.disconnect();
-    }, [hasMore, isLoadingMore, isLoading, handleLoadMore]);
 
     const handleCourtFilter = (court) => {
         setCourtFilter(court);
@@ -250,19 +207,6 @@ export default function CourtRulings() {
                     {filteredRulings.map(item => (
                         <FeedCard key={item.id} item={item} profile={profile} />
                     ))}
-
-                    {/* Infinite scroll sentinel */}
-                    {hasMore && (
-                        <div ref={sentinelRef} className={styles.loadingMore}>
-                            <div className={styles.spinnerSmall} />
-                            <span>Loading more rulings...</span>
-                        </div>
-                    )}
-                    {!hasMore && rulings.length > 10 && (
-                        <div className={styles.endOfList}>
-                            You&apos;re all caught up! ⚖️
-                        </div>
-                    )}
                 </div>
             )}
 
