@@ -24,10 +24,11 @@
 .filterBar {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--cl-space-3);
     align-items: center;
+    justify-content: space-between;
+    gap: var(--cl-space-3);
     margin-bottom: var(--cl-space-5);
-    padding: var(--cl-space-4);
+    padding: var(--cl-space-3) var(--cl-space-4);
     background: var(--cl-white);
     border: 1px solid var(--cl-gray-200);
     border-radius: var(--cl-radius-xl);
@@ -40,24 +41,15 @@
     flex-wrap: wrap;
 }
 
-.filterLabel {
-    font-size: var(--cl-font-xs);
-    font-weight: 700;
-    color: var(--cl-gray-500);
-    text-transform: uppercase;
-    letter-spacing: var(--cl-letter-spacing-wide);
-    margin-right: var(--cl-space-1);
-    display: flex;
-    align-items: center;
-}
-
 .filterPill {
+    display: inline-flex;
+    align-items: center;
     font-size: var(--cl-font-sm);
     font-weight: 500;
     color: var(--cl-gray-600);
     background: var(--cl-gray-100);
     border: 1px solid transparent;
-    padding: var(--cl-space-1) var(--cl-space-3);
+    padding: var(--cl-space-2) var(--cl-space-3);
     border-radius: var(--cl-radius-full);
     cursor: pointer;
     transition: all var(--cl-transition-fast);
@@ -76,40 +68,33 @@
     font-weight: 600;
 }
 
-.filterDivider {
-    width: 1px;
-    height: 24px;
-    background: var(--cl-gray-200);
-    margin: 0 var(--cl-space-1);
+.sortGroup {
+    display: flex;
+    gap: var(--cl-space-1);
 }
 
-.topicSelect {
-    font-size: var(--cl-font-sm);
+.sortPill {
+    font-size: var(--cl-font-xs);
     font-weight: 500;
-    color: var(--cl-gray-600);
-    background: var(--cl-gray-100);
-    border: 1px solid transparent;
+    color: var(--cl-gray-500);
+    background: transparent;
+    border: 1px solid var(--cl-gray-200);
     padding: var(--cl-space-1) var(--cl-space-3);
     border-radius: var(--cl-radius-full);
     cursor: pointer;
     transition: all var(--cl-transition-fast);
-    appearance: none;
-    -webkit-appearance: none;
-    padding-right: var(--cl-space-6);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236b7280' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 8px center;
+    white-space: nowrap;
 }
 
-.topicSelect:hover {
-    background-color: var(--cl-gray-200);
-    color: var(--cl-gray-900);
+.sortPill:hover {
+    background: var(--cl-gray-100);
+    color: var(--cl-gray-700);
 }
 
-.topicSelect:focus {
-    outline: none;
-    border-color: var(--cl-primary-200);
-    background-color: var(--cl-primary-50);
+.sortPillActive {
+    background: var(--cl-gray-800);
+    color: #fff;
+    border-color: var(--cl-gray-800);
 }
 
 /* Pro Upsell Banner */
@@ -317,11 +302,8 @@
         gap: var(--cl-space-2);
     }
 
-    .filterDivider {
-        display: none;
-    }
-
-    .filterGroup {
+    .filterGroup,
+    .sortGroup {
         width: 100%;
     }
 

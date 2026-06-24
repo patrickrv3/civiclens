@@ -7,12 +7,6 @@ import { useProfile } from '../context/ProfileContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import UpgradeModal from './UpgradeModal';
 
-const TOPIC_OPTIONS = [
-    'Immigration', 'First Amendment', 'Executive Power', 'Civil Rights',
-    'Voting Rights', 'Criminal Justice', 'Environment', 'Healthcare',
-    'Gun Rights', 'Labor', 'Technology', 'Education',
-];
-
 const PAGE_SIZE = 10;
 
 export default function CourtRulings() {
@@ -22,9 +16,7 @@ export default function CourtRulings() {
     const [rulings, setRulings] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
-    const [profileFilter, setProfileFilter] = useState('all');
     const [courtFilter, setCourtFilter] = useState('all');
-    const [topicFilter, setTopicFilter] = useState('all');
     const [sortBy, setSortBy] = useState('recent');
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
     const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -65,18 +57,12 @@ export default function CourtRulings() {
     // Reset visible count when filters change
     useEffect(() => {
         setVisibleCount(PAGE_SIZE);
-    }, [profileFilter, courtFilter, topicFilter, sortBy]);
+    }, [courtFilter, sortBy]);
 
     // Apply filters and sorting
     const filteredRulings = rulings
         .filter(item => {
-            if (profileFilter === 'high-profile' && item.profileLevel !== 'High Profile') return false;
-            if (profileFilter === 'notable' && item.profileLevel !== 'Notable') return false;
             if (courtFilter !== 'all' && item.courtType !== courtFilter) return false;
-            if (topicFilter !== 'all') {
-                const topics = item.topics || [];
-                if (!topics.includes(topicFilter)) return false;
-            }
             return true;
         })
         .sort((a, b) => {
@@ -128,35 +114,13 @@ export default function CourtRulings() {
                 <p className={styles.subtitle}>Recent judicial decisions explained in plain English</p>
             </div>
 
-            {/* Filter Bar */}
+            {/* Filter Bar — Court tabs + Sort */}
             <div className={styles.filterBar}>
-                {/* Profile Filter */}
-                <span className={styles.filterLabel}>PROFILE:</span>
-                <div className={styles.filterGroup}>
-                    {[
-                        { id: 'all', label: 'All' },
-                        { id: 'high-profile', label: '🔥 High Profile' },
-                        { id: 'notable', label: 'Notable' },
-                    ].map(f => (
-                        <button
-                            key={f.id}
-                            className={`${styles.filterPill} ${profileFilter === f.id ? styles.filterPillActive : ''}`}
-                            onClick={() => setProfileFilter(f.id)}
-                        >
-                            {f.label}
-                        </button>
-                    ))}
-                </div>
-
-                <div className={styles.filterDivider} />
-
-                {/* Court Filter */}
-                <span className={styles.filterLabel}>COURT:</span>
                 <div className={styles.filterGroup}>
                     {[
                         { id: 'all', label: 'All Courts' },
                         { id: 'scotus', label: 'Supreme Court' },
-                        { id: 'federal_appeals', label: 'Federal Appeals' },
+                        { id: 'federal_appeals', label: 'Appeals' },
                         { id: 'district', label: 'District' },
                     ].map(f => (
                         <button
@@ -172,32 +136,14 @@ export default function CourtRulings() {
                     ))}
                 </div>
 
-                <div className={styles.filterDivider} />
-
-                {/* Topic Filter */}
-                <select
-                    className={styles.topicSelect}
-                    value={topicFilter}
-                    onChange={(e) => setTopicFilter(e.target.value)}
-                >
-                    <option value="all">All Topics</option>
-                    {TOPIC_OPTIONS.map(topic => (
-                        <option key={topic} value={topic}>{topic}</option>
-                    ))}
-                </select>
-
-                <div className={styles.filterDivider} />
-
-                {/* Sort */}
-                <span className={styles.filterLabel}>SORT:</span>
-                <div className={styles.filterGroup}>
+                <div className={styles.sortGroup}>
                     {[
-                        { id: 'recent', label: '🕐 Most Recent' },
-                        { id: 'impact', label: '⚡ High Impact' },
+                        { id: 'recent', label: '🕐 Recent' },
+                        { id: 'impact', label: '⚡ Impact' },
                     ].map(f => (
                         <button
                             key={f.id}
-                            className={`${styles.filterPill} ${sortBy === f.id ? styles.filterPillActive : ''}`}
+                            className={`${styles.sortPill} ${sortBy === f.id ? styles.sortPillActive : ''}`}
                             onClick={() => setSortBy(f.id)}
                         >
                             {f.label}
@@ -227,8 +173,8 @@ export default function CourtRulings() {
                     <div className={styles.emptyIcon}>⚖️</div>
                     <div className={styles.emptyTitle}>No court rulings found</div>
                     <div className={styles.emptyText}>
-                        {profileFilter !== 'all' || courtFilter !== 'all' || topicFilter !== 'all'
-                            ? 'Try adjusting your filters to see more results.'
+                        {courtFilter !== 'all'
+                            ? 'No rulings for this court yet. Check back later.'
                             : 'Check back later for new rulings.'}
                     </div>
                 </div>
