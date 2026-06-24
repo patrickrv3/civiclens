@@ -81,7 +81,7 @@ async function cacheSummary(id, data) {
 
 async function getRateLimitCache() {
     try {
-        const snap = await getDoc(doc(db, 'billSummaries', '_court_rl_v8_'));
+        const snap = await getDoc(doc(db, 'billSummaries', '_court_rl_v9_'));
         if (!snap.exists()) return null;
         const data = snap.data();
         if (Date.now() - (data.fetchedAt || 0) > RATE_LIMIT_MS) return null;
@@ -91,7 +91,7 @@ async function getRateLimitCache() {
 
 async function saveRateLimitCache(rulingIds) {
     try {
-        await setDoc(doc(db, 'billSummaries', '_court_rl_v8_'), {
+        await setDoc(doc(db, 'billSummaries', '_court_rl_v9_'), {
             rulingIds, fetchedAt: Date.now(),
         });
     } catch (e) { console.warn('Rate limit save failed:', e.message); }
@@ -235,76 +235,90 @@ function shapeOpinion(opinion) {
     };
 }
 
+// ── AI processing helper ──
+
+async function processWithAI(opinions, lifeTags, interests) {
+    if (opinions.length === 0) return [];
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || '' });
+    const userPrompt = `Analyze these court rulings and generate tagImpacts for Life Tags: ${(lifeTags || []).join(', ') || 'None'}.${
+        interests?.length ? `\n\nThe user is interested in: ${interests.join(', ')}.` : ''
+    }\n\nRulings:\n${JSON.stringify(opinions, null, 2)}`;
+
+    const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: userPrompt },
+        ],
+        response_format: { type: 'json_object' },
+    });
+
+    const parsed = JSON.parse(completion.choices[0].message.content);
+    return parsed.rulings || [];
+}
+
 // ── Main handler ──
 
 export async function POST(request) {
     try {
-        const { lifeTags, interests, page = 1 } = await request.json();
-        const offset = (page - 1) * PAGE_SIZE;
+        const { lifeTags, interests } = await request.json();
 
-        // Step 1: Try rate limit cache — return ALL items at once (no pagination)
+        // Step 1: Try rate limit cache — return ALL items at once
         const cachedIds = await getRateLimitCache();
 
-        if (cachedIds && cachedIds.length >= 10 && page === 1) {
+        if (cachedIds && cachedIds.length >= 10) {
             const cached = (await Promise.all(cachedIds.map(getCachedSummary))).filter(Boolean);
-            console.log(`[Cache] ALL: ${cachedIds.length} ids, ${cached.length} valid`);
+            console.log(`[Cache] ${cachedIds.length} ids, ${cached.length} valid summaries`);
 
-            if (cached.length > 0) {
+            if (cached.length >= 10) {
                 return NextResponse.json({ items: cached, hasMore: false });
             }
-            // Summaries expired — fall through to re-process
+            console.log('[Cache] Not enough valid summaries, re-fetching...');
         }
 
         // Step 2: Fetch from CourtListener (2 API calls)
         const raw = await fetchAll50();
         const shaped = raw.map(shapeOpinion);
-        console.log(`[Shaped] ${shaped.length} opinions`);
+        console.log(`[Shaped] ${shaped.length} total opinions`);
 
-        // Save all IDs (only if we got a real batch)
+        if (shaped.length === 0) {
+            return NextResponse.json({ items: [], hasMore: false });
+        }
+
+        // Save all IDs for rate limiting
         if (shaped.length >= 10) {
             saveRateLimitCache(shaped.map(o => o.id));
         }
 
-        // Paginate
-        const batch = shaped.slice(offset, offset + PAGE_SIZE);
-        if (batch.length === 0) {
-            return NextResponse.json({ items: [], hasMore: false });
-        }
-
-        console.log(`[Page ${page}] processing ${batch.length} items (offset ${offset})`);
-
-        // Step 3: Check which are already cached
-        const cacheHits = await Promise.all(batch.map(o => getCachedSummary(o.id)));
+        // Step 3: Check Firestore cache for each item
+        const cacheHits = await Promise.all(shaped.map(o => getCachedSummary(o.id)));
         const cachedItems = [];
         const uncached = [];
-        batch.forEach((op, i) => {
+        shaped.forEach((op, i) => {
             if (cacheHits[i]) cachedItems.push({ ...cacheHits[i], url: op.url });
             else uncached.push(op);
         });
 
-        console.log(`[Cache] ${cachedItems.length} hit, ${uncached.length} need AI`);
+        console.log(`[Cache] ${cachedItems.length} cached, ${uncached.length} need AI`);
 
-        // Step 4: AI-process uncached (max 10)
+        // Step 4: Process ALL uncached with AI
+        // Split into 2 parallel batches to stay within 60s timeout
         let aiItems = [];
         if (uncached.length > 0) {
-            const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || '' });
-            const userPrompt = `Analyze these court rulings and generate tagImpacts for Life Tags: ${(lifeTags || []).join(', ') || 'None'}.${
-                interests?.length ? `\n\nThe user is interested in: ${interests.join(', ')}.` : ''
-            }\n\nRulings:\n${JSON.stringify(uncached, null, 2)}`;
+            if (uncached.length <= 25) {
+                // Single batch
+                aiItems = await processWithAI(uncached, lifeTags, interests);
+            } else {
+                // Two parallel batches
+                const mid = Math.ceil(uncached.length / 2);
+                const [batch1, batch2] = await Promise.all([
+                    processWithAI(uncached.slice(0, mid), lifeTags, interests),
+                    processWithAI(uncached.slice(mid), lifeTags, interests),
+                ]);
+                aiItems = [...batch1, ...batch2];
+            }
 
-            const completion = await openai.chat.completions.create({
-                model: 'gpt-4o-mini',
-                messages: [
-                    { role: 'system', content: SYSTEM_PROMPT },
-                    { role: 'user', content: userPrompt },
-                ],
-                response_format: { type: 'json_object' },
-            });
-
-            const parsed = JSON.parse(completion.choices[0].message.content);
-            aiItems = parsed.rulings || [];
-
-            // Cache each result
+            // Cache each AI result
             for (const item of aiItems) {
                 if (item.id) {
                     cacheSummary(item.id, {
@@ -316,12 +330,11 @@ export async function POST(request) {
             }
         }
 
-        // Step 5: Return combined results
+        // Step 5: Return ALL items
         const items = [...cachedItems, ...aiItems];
-        const hasMore = offset + PAGE_SIZE < shaped.length;
-        console.log(`[Done] page=${page}: ${items.length} items, hasMore=${hasMore}`);
+        console.log(`[Done] ${items.length} total items (${cachedItems.length} cached + ${aiItems.length} AI)`);
 
-        return NextResponse.json({ items, hasMore });
+        return NextResponse.json({ items, hasMore: false });
 
     } catch (error) {
         console.error('[ERROR]', error);
