@@ -112,7 +112,7 @@ async function cacheSummary(id, data) {
 
 async function getRateLimitCache() {
     try {
-        const snap = await getDoc(doc(db, 'billSummaries', '_court_rl_v17_'));
+        const snap = await getDoc(doc(db, 'billSummaries', '_court_rl_v18_'));
         if (!snap.exists()) return null;
         const data = snap.data();
         if (Date.now() - (data.fetchedAt || 0) > RATE_LIMIT_MS) return null;
@@ -122,7 +122,7 @@ async function getRateLimitCache() {
 
 async function saveRateLimitCache(rulingIds) {
     try {
-        await setDoc(doc(db, 'billSummaries', '_court_rl_v17_'), {
+        await setDoc(doc(db, 'billSummaries', '_court_rl_v18_'), {
             rulingIds, fetchedAt: Date.now(),
         });
     } catch (e) { console.warn('Rate limit save failed:', e.message); }
@@ -340,12 +340,20 @@ export async function POST(request) {
         }
 
         // Step 3: Check Firestore cache for each item
+        // Build courtType lookup from shaped data (source of truth)
+        const courtTypeMap = {};
+        shaped.forEach(op => { courtTypeMap[op.id] = op.courtType; });
+
         const cacheHits = await Promise.all(shaped.map(o => getCachedSummary(o.id)));
         const cachedItems = [];
         const uncached = [];
         shaped.forEach((op, i) => {
-            if (cacheHits[i]) cachedItems.push({ ...cacheHits[i], url: op.url });
-            else uncached.push(op);
+            if (cacheHits[i]) {
+                // Force courtType from shaped data, not from cache
+                cachedItems.push({ ...cacheHits[i], url: op.url, courtType: op.courtType });
+            } else {
+                uncached.push(op);
+            }
         });
 
         console.log(`[Cache] ${cachedItems.length} cached, ${uncached.length} need AI`);
@@ -369,6 +377,12 @@ export async function POST(request) {
                 )
             );
             aiItems = results.flat();
+
+            // Force courtType from shaped data on AI results too
+            aiItems = aiItems.map(item => ({
+                ...item,
+                courtType: courtTypeMap[item.id] || item.courtType,
+            }));
 
             // Cache each AI result
             for (const item of aiItems) {
