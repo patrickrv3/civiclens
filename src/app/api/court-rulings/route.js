@@ -112,7 +112,7 @@ async function cacheSummary(id, data) {
 
 async function getRateLimitCache() {
     try {
-        const snap = await getDoc(doc(db, 'billSummaries', '_court_rl_v13_'));
+        const snap = await getDoc(doc(db, 'billSummaries', '_court_rl_v14_'));
         if (!snap.exists()) return null;
         const data = snap.data();
         if (Date.now() - (data.fetchedAt || 0) > RATE_LIMIT_MS) return null;
@@ -122,7 +122,7 @@ async function getRateLimitCache() {
 
 async function saveRateLimitCache(rulingIds) {
     try {
-        await setDoc(doc(db, 'billSummaries', '_court_rl_v13_'), {
+        await setDoc(doc(db, 'billSummaries', '_court_rl_v14_'), {
             rulingIds, fetchedAt: Date.now(),
         });
     } catch (e) { console.warn('Rate limit save failed:', e.message); }
@@ -176,58 +176,36 @@ async function fetchCLPages(params, label, minResults = 20, maxPages = 4) {
 }
 
 /**
- * Fetch 50 opinions using separate queries:
- *   1. SCOTUS only → 1 page (20 results)
- *   2. Circuit courts → 1 page (20 results)
- *   3. Key district courts → 5 parallel queries (one per court)
- *      CourtListener search API doesn't support combining district courts.
- * 
- * Smart redistribution fills any unused slots.
+ * Fetch 50 opinions with only 3 API calls (~9 seconds):
+ *   1. SCOTUS (1 call → 20 results)
+ *   2. Circuit courts (1 call → 20 results)
+ *   3. D.C. District Court (1 call → 20 results)
+ *      DC District handles most high-profile federal cases:
+ *      immigration, executive orders, agency challenges, etc.
  */
 async function fetchAll50() {
     const filedAfter = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
         .toISOString().split('T')[0];
 
-    const makeParams = (courts) => {
+    const makeUrl = (courts) => {
         const p = new URLSearchParams();
         p.append('type', 'o');
         p.append('order_by', 'dateFiled desc');
         p.append('filed_after', filedAfter);
         courts.forEach(c => p.append('court', c));
-        return p;
+        return `https://www.courtlistener.com/api/rest/v4/search/?${p.toString()}`;
     };
 
-    // Query 1: SCOTUS (single query)
-    const scotusUrl = `https://www.courtlistener.com/api/rest/v4/search/?${makeParams(SCOTUS_COURTS).toString()}`;
-    const { results: scotusRaw } = await fetchCL(scotusUrl, 'SCOTUS');
-
-    await new Promise(r => setTimeout(r, 1500));
-
-    // Query 2: All circuit courts (single query — works for circuits)
-    const appealsUrl = `https://www.courtlistener.com/api/rest/v4/search/?${makeParams(CIRCUIT_COURTS).toString()}`;
-    const { results: appealsRaw } = await fetchCL(appealsUrl, 'Appeals');
-
-    await new Promise(r => setTimeout(r, 1500));
-
-    // Query 3: District courts — one query per court (CourtListener bug:
-    // combining district courts in one query returns 0 results)
-    // We query the 5 most important district courts sequentially
-    const keyDistricts = ['dcd', 'txnd', 'cacd', 'nysd', 'flsd'];
-    let districtRaw = [];
-    for (let i = 0; i < keyDistricts.length; i++) {
-        const court = keyDistricts[i];
-        const url = `https://www.courtlistener.com/api/rest/v4/search/?${makeParams([court]).toString()}`;
-        const { results } = await fetchCL(url, `District-${court}`);
-        districtRaw.push(...results);
-        // Small delay between queries (except last)
-        if (i < keyDistricts.length - 1) {
-            await new Promise(r => setTimeout(r, 800));
-        }
-    }
+    // 3 sequential queries with 1s delays
+    const { results: scotusRaw } = await fetchCL(makeUrl(SCOTUS_COURTS), 'SCOTUS');
+    await new Promise(r => setTimeout(r, 1000));
+    const { results: appealsRaw } = await fetchCL(makeUrl(CIRCUIT_COURTS), 'Appeals');
+    await new Promise(r => setTimeout(r, 1000));
+    const { results: districtRaw } = await fetchCL(makeUrl(['dcd']), 'DC-District');
 
     console.log(`[Raw] SCOTUS=${scotusRaw.length} Appeals=${appealsRaw.length} District=${districtRaw.length}`);
 
-    // Deduplicate across all sources
+    // Deduplicate
     const seen = new Set();
     const dedup = (arr) => arr.filter(r => {
         const k = r.cluster_id || r.id || r.docket_id;
