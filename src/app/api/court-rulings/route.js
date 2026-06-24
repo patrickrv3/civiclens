@@ -26,6 +26,29 @@ const CIRCUIT_COURTS = [
     'ca1', 'ca2', 'ca3', 'ca4', 'ca5', 'ca6', 'ca7', 'ca8',
     'ca9', 'ca10', 'ca11', 'cadc', 'cafc',
 ];
+// Top federal district courts (most active for high-profile rulings)
+const DISTRICT_COURTS = [
+    'dcd',    // D.C. — executive power, immigration, federal agency cases
+    'nysd',   // Southern District of NY — financial, civil rights
+    'nyed',   // Eastern District of NY
+    'cacd',   // Central District of CA — immigration, tech
+    'cand',   // Northern District of CA — tech, civil rights
+    'casd',   // Southern District of CA — border/immigration
+    'txsd',   // Southern District of TX — immigration, border
+    'txnd',   // Northern District of TX — executive orders, gun rights
+    'txed',   // Eastern District of TX — patent, tech
+    'txwd',   // Western District of TX — immigration
+    'flsd',   // Southern District of FL — various
+    'flmd',   // Middle District of FL
+    'ilnd',   // Northern District of IL — civil rights
+    'paed',   // Eastern District of PA
+    'mad',    // District of MA
+    'mdd',    // District of MD
+    'vaed',   // Eastern District of VA
+    'gand',   // Northern District of GA — voting rights
+    'cod',    // District of CO
+    'azd',    // District of AZ — immigration
+];
 
 const COURT_NAME_MAP = {
     scotus: 'Supreme Court',
@@ -34,6 +57,14 @@ const COURT_NAME_MAP = {
     ca7: '7th Circuit', ca8: '8th Circuit', ca9: '9th Circuit',
     ca10: '10th Circuit', ca11: '11th Circuit',
     cadc: 'D.C. Circuit', cafc: 'Federal Circuit',
+    dcd: 'D.C. District', nysd: 'S.D.N.Y.', nyed: 'E.D.N.Y.',
+    cacd: 'C.D. Cal.', cand: 'N.D. Cal.', casd: 'S.D. Cal.',
+    txsd: 'S.D. Tex.', txnd: 'N.D. Tex.', txed: 'E.D. Tex.', txwd: 'W.D. Tex.',
+    flsd: 'S.D. Fla.', flmd: 'M.D. Fla.',
+    ilnd: 'N.D. Ill.', paed: 'E.D. Pa.',
+    mad: 'D. Mass.', mdd: 'D. Md.',
+    vaed: 'E.D. Va.', gand: 'N.D. Ga.',
+    cod: 'D. Colo.', azd: 'D. Ariz.',
 };
 
 const SYSTEM_PROMPT = `You are an expert, neutral, nonpartisan civic analyst specializing in court rulings.
@@ -81,7 +112,7 @@ async function cacheSummary(id, data) {
 
 async function getRateLimitCache() {
     try {
-        const snap = await getDoc(doc(db, 'billSummaries', '_court_rl_v12_'));
+        const snap = await getDoc(doc(db, 'billSummaries', '_court_rl_v13_'));
         if (!snap.exists()) return null;
         const data = snap.data();
         if (Date.now() - (data.fetchedAt || 0) > RATE_LIMIT_MS) return null;
@@ -91,7 +122,7 @@ async function getRateLimitCache() {
 
 async function saveRateLimitCache(rulingIds) {
     try {
-        await setDoc(doc(db, 'billSummaries', '_court_rl_v12_'), {
+        await setDoc(doc(db, 'billSummaries', '_court_rl_v13_'), {
             rulingIds, fetchedAt: Date.now(),
         });
     } catch (e) { console.warn('Rate limit save failed:', e.message); }
@@ -145,11 +176,11 @@ async function fetchCLPages(params, label, minResults = 20, maxPages = 4) {
 }
 
 /**
- * Fetch 50 opinions using 3 sequential queries with cursor pagination:
- *   1. SCOTUS only → 1 page (20 results, plenty for 15 slots)
- *   2. Circuit courts → 1 page (20 results, plenty for 15 slots)  
- *   3. Keyword search → up to 4 pages (need many results because most
- *      are from SCOTUS/circuits and get filtered out, leaving district)
+ * Fetch 50 opinions using separate queries:
+ *   1. SCOTUS only → 1 page (20 results)
+ *   2. Circuit courts → 1 page (20 results)
+ *   3. Key district courts → 5 parallel queries (one per court)
+ *      CourtListener search API doesn't support combining district courts.
  * 
  * Smart redistribution fills any unused slots.
  */
@@ -157,40 +188,44 @@ async function fetchAll50() {
     const filedAfter = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
         .toISOString().split('T')[0];
 
-    // Query 1: SCOTUS only (1 page = 20 results)
-    const p1 = new URLSearchParams();
-    p1.append('type', 'o');
-    p1.append('order_by', 'dateFiled desc');
-    p1.append('filed_after', filedAfter);
-    SCOTUS_COURTS.forEach(c => p1.append('court', c));
-    const scotusRaw = await fetchCLPages(p1, 'SCOTUS', 15, 1);
+    const makeParams = (courts) => {
+        const p = new URLSearchParams();
+        p.append('type', 'o');
+        p.append('order_by', 'dateFiled desc');
+        p.append('filed_after', filedAfter);
+        courts.forEach(c => p.append('court', c));
+        return p;
+    };
 
-    // 1.5s delay
+    // Query 1: SCOTUS (single query)
+    const scotusUrl = `https://www.courtlistener.com/api/rest/v4/search/?${makeParams(SCOTUS_COURTS).toString()}`;
+    const { results: scotusRaw } = await fetchCL(scotusUrl, 'SCOTUS');
+
     await new Promise(r => setTimeout(r, 1500));
 
-    // Query 2: Circuit courts only (1 page = 20 results)
-    const p2 = new URLSearchParams();
-    p2.append('type', 'o');
-    p2.append('order_by', 'dateFiled desc');
-    p2.append('filed_after', filedAfter);
-    CIRCUIT_COURTS.forEach(c => p2.append('court', c));
-    const appealsRaw = await fetchCLPages(p2, 'Appeals', 15, 1);
+    // Query 2: All circuit courts (single query — works for circuits)
+    const appealsUrl = `https://www.courtlistener.com/api/rest/v4/search/?${makeParams(CIRCUIT_COURTS).toString()}`;
+    const { results: appealsRaw } = await fetchCL(appealsUrl, 'Appeals');
 
-    // 1.5s delay
     await new Promise(r => setTimeout(r, 1500));
 
-    // Query 3: Keyword search — need multiple pages since most results
-    // are SCOTUS/circuit that get filtered out, leaving only district courts
-    const p3 = new URLSearchParams();
-    p3.append('type', 'o');
-    p3.append('order_by', 'dateFiled desc');
-    p3.append('filed_after', filedAfter);
-    p3.append('q',
-        '"preliminary injunction" OR "temporary restraining order" OR ' +
-        '"unconstitutional" OR "voter rolls" OR "deportation" OR ' +
-        '"executive order" OR "struck down" OR "enjoined"'
-    );
-    const districtRaw = await fetchCLPages(p3, 'HighProfile', 80, 4);
+    // Query 3: District courts — one query per court (CourtListener bug:
+    // combining district courts in one query returns 0 results)
+    // We query the 5 most important district courts sequentially
+    const keyDistricts = ['dcd', 'txnd', 'cacd', 'nysd', 'flsd'];
+    let districtRaw = [];
+    for (let i = 0; i < keyDistricts.length; i++) {
+        const court = keyDistricts[i];
+        const url = `https://www.courtlistener.com/api/rest/v4/search/?${makeParams([court]).toString()}`;
+        const { results } = await fetchCL(url, `District-${court}`);
+        districtRaw.push(...results);
+        // Small delay between queries (except last)
+        if (i < keyDistricts.length - 1) {
+            await new Promise(r => setTimeout(r, 800));
+        }
+    }
+
+    console.log(`[Raw] SCOTUS=${scotusRaw.length} Appeals=${appealsRaw.length} District=${districtRaw.length}`);
 
     // Deduplicate across all sources
     const seen = new Set();
@@ -201,14 +236,9 @@ async function fetchAll50() {
         return true;
     });
 
-    // Dedup in order: SCOTUS first (priority), then appeals, then district
     const scotus = dedup(scotusRaw);
     const appeals = dedup(appealsRaw);
-    // For district: exclude anything that's actually SCOTUS or circuit
-    const district = dedup(districtRaw).filter(r => {
-        const cid = r.court_id || '';
-        return !SCOTUS_COURTS.includes(cid) && !CIRCUIT_COURTS.includes(cid);
-    });
+    const district = dedup(districtRaw);
 
     const byDate = (a, b) => (b.dateFiled || '').localeCompare(a.dateFiled || '');
     scotus.sort(byDate);
