@@ -112,7 +112,7 @@ async function cacheSummary(id, data) {
 
 async function getRateLimitCache() {
     try {
-        const snap = await getDoc(doc(db, 'billSummaries', '_court_rl_v15_'));
+        const snap = await getDoc(doc(db, 'billSummaries', '_court_rl_v16_'));
         if (!snap.exists()) return null;
         const data = snap.data();
         if (Date.now() - (data.fetchedAt || 0) > RATE_LIMIT_MS) return null;
@@ -122,7 +122,7 @@ async function getRateLimitCache() {
 
 async function saveRateLimitCache(rulingIds) {
     try {
-        await setDoc(doc(db, 'billSummaries', '_court_rl_v15_'), {
+        await setDoc(doc(db, 'billSummaries', '_court_rl_v16_'), {
             rulingIds, fetchedAt: Date.now(),
         });
     } catch (e) { console.warn('Rate limit save failed:', e.message); }
@@ -176,12 +176,11 @@ async function fetchCLPages(params, label, minResults = 20, maxPages = 4) {
 }
 
 /**
- * Fetch 50 opinions with only 3 API calls (~9 seconds):
- *   1. SCOTUS (1 call → 20 results)
- *   2. Circuit courts (1 call → 20 results)
- *   3. D.C. District Court (1 call → 20 results)
- *      DC District handles most high-profile federal cases:
- *      immigration, executive orders, agency challenges, etc.
+ * Fetch 50 opinions with 3 PARALLEL API calls (~3 seconds):
+ *   1. SCOTUS (20 results)
+ *   2. Circuit courts (20 results)
+ *   3. D.C. District Court (20 results)
+ * All 3 fire simultaneously — faster and avoids sequential timeout issues.
  */
 async function fetchAll50() {
     const filedAfter = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
@@ -196,14 +195,21 @@ async function fetchAll50() {
         return `https://www.courtlistener.com/api/rest/v4/search/?${p.toString()}`;
     };
 
-    // 3 sequential queries with 1s delays
-    const { results: scotusRaw } = await fetchCL(makeUrl(SCOTUS_COURTS), 'SCOTUS');
-    await new Promise(r => setTimeout(r, 1000));
-    const { results: appealsRaw } = await fetchCL(makeUrl(CIRCUIT_COURTS), 'Appeals');
-    await new Promise(r => setTimeout(r, 1000));
-    const { results: districtRaw } = await fetchCL(makeUrl(['dcd']), 'DC-District');
+    // Fire all 3 in parallel
+    const [scotusRes, appealsRes, districtRes] = await Promise.allSettled([
+        fetchCL(makeUrl(SCOTUS_COURTS), 'SCOTUS'),
+        fetchCL(makeUrl(CIRCUIT_COURTS), 'Appeals'),
+        fetchCL(makeUrl(['dcd']), 'DC-District'),
+    ]);
+
+    const scotusRaw = scotusRes.status === 'fulfilled' ? scotusRes.value.results : [];
+    const appealsRaw = appealsRes.status === 'fulfilled' ? appealsRes.value.results : [];
+    const districtRaw = districtRes.status === 'fulfilled' ? districtRes.value.results : [];
 
     console.log(`[Raw] SCOTUS=${scotusRaw.length} Appeals=${appealsRaw.length} District=${districtRaw.length}`);
+    if (scotusRes.status === 'rejected') console.error('[SCOTUS failed]', scotusRes.reason);
+    if (appealsRes.status === 'rejected') console.error('[Appeals failed]', appealsRes.reason);
+    if (districtRes.status === 'rejected') console.error('[District failed]', districtRes.reason);
 
     // Deduplicate
     const seen = new Set();
