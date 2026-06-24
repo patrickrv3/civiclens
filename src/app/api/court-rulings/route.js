@@ -112,7 +112,7 @@ async function cacheSummary(id, data) {
 
 async function getRateLimitCache() {
     try {
-        const snap = await getDoc(doc(db, 'billSummaries', '_court_rl_v16_'));
+        const snap = await getDoc(doc(db, 'billSummaries', '_court_rl_v17_'));
         if (!snap.exists()) return null;
         const data = snap.data();
         if (Date.now() - (data.fetchedAt || 0) > RATE_LIMIT_MS) return null;
@@ -122,7 +122,7 @@ async function getRateLimitCache() {
 
 async function saveRateLimitCache(rulingIds) {
     try {
-        await setDoc(doc(db, 'billSummaries', '_court_rl_v16_'), {
+        await setDoc(doc(db, 'billSummaries', '_court_rl_v17_'), {
             rulingIds, fetchedAt: Date.now(),
         });
     } catch (e) { console.warn('Rate limit save failed:', e.message); }
@@ -351,21 +351,24 @@ export async function POST(request) {
         console.log(`[Cache] ${cachedItems.length} cached, ${uncached.length} need AI`);
 
         // Step 4: Process ALL uncached with AI
-        // Split into 2 parallel batches to stay within 60s timeout
+        // Split into smaller batches (~17 items each) to prevent output truncation
         let aiItems = [];
         if (uncached.length > 0) {
-            if (uncached.length <= 25) {
-                // Single batch
-                aiItems = await processWithAI(uncached, lifeTags, interests);
-            } else {
-                // Two parallel batches
-                const mid = Math.ceil(uncached.length / 2);
-                const [batch1, batch2] = await Promise.all([
-                    processWithAI(uncached.slice(0, mid), lifeTags, interests),
-                    processWithAI(uncached.slice(mid), lifeTags, interests),
-                ]);
-                aiItems = [...batch1, ...batch2];
+            const BATCH_SIZE = 17;
+            const batches = [];
+            for (let i = 0; i < uncached.length; i += BATCH_SIZE) {
+                batches.push(uncached.slice(i, i + BATCH_SIZE));
             }
+            console.log(`[AI] ${uncached.length} items → ${batches.length} batches of [${batches.map(b => b.length).join(', ')}]`);
+
+            const results = await Promise.all(
+                batches.map((batch, i) =>
+                    processWithAI(batch, lifeTags, interests)
+                        .then(r => { console.log(`[AI] Batch ${i + 1}: sent ${batch.length}, got ${r.length}`); return r; })
+                        .catch(e => { console.error(`[AI] Batch ${i + 1} failed:`, e.message); return []; })
+                )
+            );
+            aiItems = results.flat();
 
             // Cache each AI result
             for (const item of aiItems) {
