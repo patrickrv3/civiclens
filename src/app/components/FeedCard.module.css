@@ -63,21 +63,52 @@
     font-weight: 500;
 }
 
-.feedImpact {
+.badgeRow {
     display: flex;
     align-items: center;
-    gap: var(--cl-space-1);
-    font-size: var(--cl-font-xs);
-    font-weight: 600;
-    color: var(--cl-primary-600);
-    background: var(--cl-primary-50);
-    padding: var(--cl-space-1) var(--cl-space-2);
-    border-radius: var(--cl-radius-full);
+    gap: 6px;
+    flex-shrink: 0;
 }
 
-.feedImpact svg {
-    width: 14px;
-    height: 14px;
+.impactTag {
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    line-height: 1.4;
+}
+
+.impactHigh {
+    color: #dc2626;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+}
+
+.impactModerate {
+    color: #d97706;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+}
+
+.impactLow {
+    color: #0284c7;
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+}
+
+.profileTag {
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    color: #7c3aed;
+    background: #f5f3ff;
+    border: 1px solid #ddd6fe;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    line-height: 1.4;
 }
 
 .feedTitle {
@@ -174,18 +205,4 @@
 .watching {
     color: var(--cl-primary-600);
     background: var(--cl-primary-50);
-}
-
-.highProfileBadge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 0.7rem;
-    font-weight: 700;
-    color: #dc2626;
-    background: #fee2e2;
-    padding: 2px 8px;
-    border-radius: 999px;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
 }

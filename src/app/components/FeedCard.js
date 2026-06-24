@@ -9,11 +9,6 @@ import { useSubscription } from '../context/SubscriptionContext';
 import UpgradeModal from './UpgradeModal';
 
 // SVG Icons
-const AlertCircleIcon = () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-    </svg>
-);
 
 const MessageSquareIcon = () => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -127,17 +122,18 @@ export default function FeedCard({ item, profile }) {
                         return `Last action: ${new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
                     })()}</span>
                 </div>
-                <div className={styles.feedImpact} style={{
-                    color: item.impactLevel === 'High Impact' ? '#dc2626' :
-                        item.impactLevel === 'Moderate Impact' ? '#ea580c' : '#38bdf8'
-                }}>
-                    <AlertCircleIcon /> {item.impactLevel}
+                <div className={styles.badgeRow}>
+                    <span className={`${styles.impactTag} ${
+                        item.impactLevel === 'High Impact' ? styles.impactHigh :
+                        item.impactLevel === 'Moderate Impact' ? styles.impactModerate : styles.impactLow
+                    }`}>
+                        {item.impactLevel === 'High Impact' ? 'High' :
+                         item.impactLevel === 'Moderate Impact' ? 'Moderate' : 'Low'}
+                    </span>
+                    {item.profileLevel === 'High Profile' && (
+                        <span className={styles.profileTag}>High Profile</span>
+                    )}
                 </div>
-                {item.profileLevel === 'High Profile' && (
-                    <div className={styles.highProfileBadge}>
-                        🔥 High Profile
-                    </div>
-                )}
             </div>
 
             {item.court && (
