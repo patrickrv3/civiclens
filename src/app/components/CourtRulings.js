@@ -250,9 +250,13 @@ export default function CourtRulings() {
                     )}
 
                     {/* End of list indicator */}
-                    {!hasMore && filteredRulings.length > PAGE_SIZE && (
+                    {!hasMore && (
                         <div className={styles.endOfList}>
-                            Showing all {filteredRulings.length} rulings
+                            <div className={styles.endOfListIcon}>⚖️</div>
+                            <div className={styles.endOfListTitle}>You're all caught up!</div>
+                            <div className={styles.endOfListText}>
+                                You've seen all {filteredRulings.length} ruling{filteredRulings.length !== 1 ? 's' : ''}{courtFilter !== 'all' ? ' in this court' : ''}. New rulings are added every 6 hours.
+                            </div>
                         </div>
                     )}
                 </div>

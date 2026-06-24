@@ -281,10 +281,29 @@
 
 .endOfList {
     text-align: center;
-    padding: var(--cl-space-4);
+    padding: var(--cl-space-6) var(--cl-space-4);
+    margin-top: var(--cl-space-4);
+    border: 1px dashed var(--cl-gray-200);
+    border-radius: var(--cl-radius-xl);
+    background: var(--cl-gray-50);
+}
+
+.endOfListIcon {
+    font-size: 2rem;
+    margin-bottom: var(--cl-space-2);
+}
+
+.endOfListTitle {
+    font-size: var(--cl-font-base);
+    font-weight: 700;
+    color: var(--cl-gray-700);
+    margin-bottom: var(--cl-space-1);
+}
+
+.endOfListText {
     font-size: var(--cl-font-sm);
     color: var(--cl-gray-400);
-    font-weight: 500;
+    line-height: 1.5;
 }
 
 /* Responsive */
