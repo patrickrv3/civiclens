@@ -81,7 +81,7 @@ async function cacheSummary(id, data) {
 
 async function getRateLimitCache() {
     try {
-        const snap = await getDoc(doc(db, 'billSummaries', '_court_rl_v10_'));
+        const snap = await getDoc(doc(db, 'billSummaries', '_court_rl_v11_'));
         if (!snap.exists()) return null;
         const data = snap.data();
         if (Date.now() - (data.fetchedAt || 0) > RATE_LIMIT_MS) return null;
@@ -91,7 +91,7 @@ async function getRateLimitCache() {
 
 async function saveRateLimitCache(rulingIds) {
     try {
-        await setDoc(doc(db, 'billSummaries', '_court_rl_v10_'), {
+        await setDoc(doc(db, 'billSummaries', '_court_rl_v11_'), {
             rulingIds, fetchedAt: Date.now(),
         });
     } catch (e) { console.warn('Rate limit save failed:', e.message); }
@@ -99,8 +99,7 @@ async function saveRateLimitCache(rulingIds) {
 
 // ── CourtListener fetch ──
 
-async function fetchCL(params, label) {
-    const url = `https://www.courtlistener.com/api/rest/v4/search/?${params.toString()}`;
+async function fetchCL(url, label) {
     console.log(`[CL] ${label}:`, url);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20000);
@@ -110,66 +109,88 @@ async function fetchCL(params, label) {
             signal: controller.signal,
         });
         clearTimeout(timeout);
-        if (!res.ok) { console.error(`[CL] ${label} error: ${res.status}`); return []; }
+        if (!res.ok) { console.error(`[CL] ${label} error: ${res.status}`); return { results: [], next: null }; }
         const data = await res.json();
-        console.log(`[CL] ${label}: ${(data.results || []).length} results`);
-        return data.results || [];
+        console.log(`[CL] ${label}: ${(data.results || []).length} results (of ${data.count || '?'} total)`);
+        return { results: data.results || [], next: data.next || null };
     } catch (err) {
         clearTimeout(timeout);
         console.error(`[CL] ${label} failed:`, err.message);
-        return [];
+        return { results: [], next: null };
     }
 }
 
 /**
- * Fetch 50 opinions using 3 sequential queries (with page_size control):
- *   1. SCOTUS only (page_size=15)
- *   2. Circuit courts only (page_size=20)
- *   3. High-profile keyword search for district courts (page_size=25)
+ * Fetch multiple pages from CourtListener, following cursor links.
+ * Stops when we have enough results or run out of pages.
+ */
+async function fetchCLPages(params, label, minResults = 20, maxPages = 4) {
+    const firstUrl = `https://www.courtlistener.com/api/rest/v4/search/?${params.toString()}`;
+    let allResults = [];
+    let nextUrl = firstUrl;
+    let page = 0;
+
+    while (nextUrl && page < maxPages && allResults.length < minResults) {
+        const { results, next } = await fetchCL(nextUrl, `${label} p${page + 1}`);
+        allResults.push(...results);
+        nextUrl = next;
+        page++;
+        if (nextUrl && allResults.length < minResults) {
+            await new Promise(r => setTimeout(r, 1000)); // delay between pages
+        }
+    }
+
+    console.log(`[CL] ${label} total: ${allResults.length} results across ${page} page(s)`);
+    return allResults;
+}
+
+/**
+ * Fetch 50 opinions using 3 sequential queries with cursor pagination:
+ *   1. SCOTUS only → 1 page (20 results, plenty for 15 slots)
+ *   2. Circuit courts → 1 page (20 results, plenty for 15 slots)  
+ *   3. Keyword search → up to 4 pages (need many results because most
+ *      are from SCOTUS/circuits and get filtered out, leaving district)
  * 
- * Each query gets its own dedicated results. Smart redistribution fills
- * any unused slots from courts with fewer results.
+ * Smart redistribution fills any unused slots.
  */
 async function fetchAll50() {
     const filedAfter = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
         .toISOString().split('T')[0];
 
-    // Query 1: SCOTUS only (want 15)
+    // Query 1: SCOTUS only (1 page = 20 results)
     const p1 = new URLSearchParams();
     p1.append('type', 'o');
     p1.append('order_by', 'dateFiled desc');
     p1.append('filed_after', filedAfter);
-    p1.append('page_size', '15');
     SCOTUS_COURTS.forEach(c => p1.append('court', c));
-    const scotusRaw = await fetchCL(p1, 'SCOTUS');
+    const scotusRaw = await fetchCLPages(p1, 'SCOTUS', 15, 1);
 
     // 1.5s delay
     await new Promise(r => setTimeout(r, 1500));
 
-    // Query 2: Circuit courts only (want 15)
+    // Query 2: Circuit courts only (1 page = 20 results)
     const p2 = new URLSearchParams();
     p2.append('type', 'o');
     p2.append('order_by', 'dateFiled desc');
     p2.append('filed_after', filedAfter);
-    p2.append('page_size', '20');
     CIRCUIT_COURTS.forEach(c => p2.append('court', c));
-    const appealsRaw = await fetchCL(p2, 'Appeals');
+    const appealsRaw = await fetchCLPages(p2, 'Appeals', 15, 1);
 
     // 1.5s delay
     await new Promise(r => setTimeout(r, 1500));
 
-    // Query 3: High-profile keyword search (catches district courts, want 20)
+    // Query 3: Keyword search — need multiple pages since most results
+    // are SCOTUS/circuit that get filtered out, leaving only district courts
     const p3 = new URLSearchParams();
     p3.append('type', 'o');
     p3.append('order_by', 'dateFiled desc');
     p3.append('filed_after', filedAfter);
-    p3.append('page_size', '25');
     p3.append('q',
         '"preliminary injunction" OR "temporary restraining order" OR ' +
         '"unconstitutional" OR "voter rolls" OR "deportation" OR ' +
         '"executive order" OR "struck down" OR "enjoined"'
     );
-    const districtRaw = await fetchCL(p3, 'HighProfile');
+    const districtRaw = await fetchCLPages(p3, 'HighProfile', 80, 4);
 
     // Deduplicate across all sources
     const seen = new Set();
