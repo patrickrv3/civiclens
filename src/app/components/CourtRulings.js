@@ -121,7 +121,7 @@ export default function CourtRulings() {
                         { id: 'all', label: 'All Courts' },
                         { id: 'scotus', label: 'Supreme Court' },
                         { id: 'federal_appeals', label: 'Appeals' },
-                        { id: 'district', label: 'District' },
+                        { id: 'district', label: 'D.C. District' },
                     ].map(f => (
                         <button
                             key={f.id}
