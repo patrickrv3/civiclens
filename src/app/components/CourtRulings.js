@@ -74,11 +74,15 @@ export default function CourtRulings() {
         fetchRulings(1, false);
     }, [profile.lifeTags, profile.interests]);
 
+    const loadingMoreRef = useRef(false);
     const handleLoadMore = useCallback(() => {
-        if (!isLoadingMore && hasMore) {
-            fetchRulings(page + 1, true);
+        if (!loadingMoreRef.current && hasMore && !isLoading) {
+            loadingMoreRef.current = true;
+            fetchRulings(page + 1, true).finally(() => {
+                loadingMoreRef.current = false;
+            });
         }
-    }, [page, isLoadingMore, hasMore]);
+    }, [page, hasMore, isLoading]);
 
     // Infinite scroll: observe sentinel div at bottom
     const sentinelRef = useRef(null);
@@ -164,7 +168,6 @@ export default function CourtRulings() {
                         { id: 'all', label: 'All Courts' },
                         { id: 'scotus', label: 'Supreme Court' },
                         { id: 'federal_appeals', label: 'Federal Appeals' },
-                        { id: 'state_supreme', label: 'State Supreme' },
                         { id: 'district', label: 'District' },
                     ].map(f => (
                         <button
