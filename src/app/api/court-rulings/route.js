@@ -112,7 +112,7 @@ async function cacheSummary(id, data) {
 
 async function getRateLimitCache() {
     try {
-        const snap = await getDoc(doc(db, 'billSummaries', '_court_rl_v14_'));
+        const snap = await getDoc(doc(db, 'billSummaries', '_court_rl_v15_'));
         if (!snap.exists()) return null;
         const data = snap.data();
         if (Date.now() - (data.fetchedAt || 0) > RATE_LIMIT_MS) return null;
@@ -122,7 +122,7 @@ async function getRateLimitCache() {
 
 async function saveRateLimitCache(rulingIds) {
     try {
-        await setDoc(doc(db, 'billSummaries', '_court_rl_v14_'), {
+        await setDoc(doc(db, 'billSummaries', '_court_rl_v15_'), {
             rulingIds, fetchedAt: Date.now(),
         });
     } catch (e) { console.warn('Rate limit save failed:', e.message); }
