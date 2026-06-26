@@ -7,19 +7,19 @@ export const maxDuration = 60; // Allow up to 60s for OpenAI processing of uncac
 export const dynamic = 'force-dynamic'; // Prevent caching of API responses
 
 // Retry helper for external API calls
-async function fetchWithRetry(url, options = {}, retries = 2) {
+async function fetchWithRetry(url, options = {}, retries = 1) {
     for (let attempt = 0; attempt <= retries; attempt++) {
         try {
-            const res = await fetch(url, { ...options, signal: AbortSignal.timeout(15000) });
+            const res = await fetch(url, { ...options, signal: AbortSignal.timeout(8000) });
             if (res.ok) return res;
             if (attempt < retries && (res.status >= 500 || res.status === 429)) {
-                await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+                await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
                 continue;
             }
             return res; // Return non-ok response for caller to handle
         } catch (err) {
             if (attempt < retries) {
-                await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+                await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
                 continue;
             }
             throw err;
@@ -130,10 +130,11 @@ export async function POST(request) {
         }
 
         const data = await congressRes.json();
-        // Keep only current congress (119th, 2025-2027) and limit to 15 for processing
+        // Keep only current congress (119th, 2025-2027) and limit to 8 for processing
+        // (reduced from 15 to stay well within Vercel's 60s timeout)
         const bills = (data.bills || [])
             .filter(b => b.congress >= 119)
-            .slice(0, 15);
+            .slice(0, 8);
 
         // Bills filtered to current congress only
 
@@ -186,23 +187,34 @@ export async function POST(request) {
         let aiItems = [];
         if (uncachedBills.length > 0) {
           try {
+            // Process in parallel chunks of 4 to stay fast
+            const CHUNK_SIZE = 4;
+            const chunks = [];
+            for (let i = 0; i < uncachedBills.length; i += CHUNK_SIZE) {
+                chunks.push(uncachedBills.slice(i, i + CHUNK_SIZE));
+            }
+
             const interestsText = interests && interests.length > 0
                 ? "\n\nThe user is interested in these policy topics: " + interests.join(", ") + ". Please classify and prioritize bills related to these topics with higher impact levels."
                 : "";
-            const userPrompt = "Summarize these corresponding bills and generate personalized impacts for the following Life Tags: " + (lifeTags ? lifeTags.join(", ") : "None") + "." + interestsText + "\n\nBills to process:\n" + JSON.stringify(uncachedBills, null, 2);
 
-            const completion = await openai.chat.completions.create({
-                model: "gpt-4o-mini", // Faster and cheaper than gpt-4o
-                messages: [
-                    { role: "system", content: SYSTEM_PROMPT },
-                    { role: "user", content: userPrompt }
-                ],
-                response_format: { type: "json_object" },
-                timeout: 30000, // 30s timeout for OpenAI
+            const chunkPromises = chunks.map(async (chunk) => {
+                const userPrompt = "Summarize these corresponding bills and generate personalized impacts for the following Life Tags: " + (lifeTags ? lifeTags.join(", ") : "None") + "." + interestsText + "\n\nBills to process:\n" + JSON.stringify(chunk, null, 2);
+                const completion = await openai.chat.completions.create({
+                    model: "gpt-4o-mini",
+                    messages: [
+                        { role: "system", content: SYSTEM_PROMPT },
+                        { role: "user", content: userPrompt }
+                    ],
+                    response_format: { type: "json_object" },
+                    timeout: 25000,
+                });
+                const aiResponse = JSON.parse(completion.choices[0].message.content);
+                return aiResponse.bills || [];
             });
 
-            const aiResponse = JSON.parse(completion.choices[0].message.content);
-            aiItems = aiResponse.bills || [];
+            const chunkResults = await Promise.all(chunkPromises);
+            aiItems = chunkResults.flat();
 
             // 5. Save new summaries to Firestore cache (fire-and-forget)
             aiItems.forEach(item => {
