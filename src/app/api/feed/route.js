@@ -130,11 +130,11 @@ export async function POST(request) {
         }
 
         const data = await congressRes.json();
-        // Keep only current congress (119th, 2025-2027) and limit to 8 for processing
-        // (reduced from 15 to stay well within Vercel's 60s timeout)
+        // Keep only current congress (119th, 2025-2027) and limit to 12 for processing
+        // (parallel chunks of 4 keep each OpenAI call fast)
         const bills = (data.bills || [])
             .filter(b => b.congress >= 119)
-            .slice(0, 8);
+            .slice(0, 12);
 
         // Bills filtered to current congress only
 

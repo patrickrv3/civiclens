@@ -16,7 +16,7 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const db = getFirestore(app);
 
-const CACHE_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours for individual summaries
+const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days — court rulings don't change once published
 const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours between CourtListener fetches
 const MAX_PER_COURT = 50; // Rolling window: keep top 50 per court
 
@@ -292,17 +292,18 @@ export async function POST(request) {
                 );
                 const aiItems = results.flat();
 
-                // Cache each AI result with correct courtType
-                for (const item of aiItems) {
+                // Cache each AI result with correct courtType (await to avoid race condition)
+                await Promise.all(aiItems.map(item => {
                     if (item.id) {
-                        cacheSummary(item.id, {
+                        return cacheSummary(item.id, {
                             ...item,
                             courtType: courtTypeMap[item.id] || item.courtType,
                             sponsors: [], locationMatches: [],
                             likes: 0, dislikes: 0,
                         });
                     }
-                }
+                    return Promise.resolve();
+                }));
             }
 
             // Step 5: Save updated per-court caches

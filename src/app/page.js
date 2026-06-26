@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import AppShell from './components/AppShell';
 import styles from './page.module.css';
 import { useProfile } from './context/ProfileContext';
@@ -119,9 +119,6 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Runs ONCE on mount
 
-  // Scroll anchor — captures scroll at the exact moment new items are about to be painted
-  const scrollAnchorY = useRef(null);
-
   // Load more bills — used by IntersectionObserver
   const loadMore = useCallback(async () => {
     if (isLoadingMoreRef.current || !hasMore) return;
@@ -150,9 +147,7 @@ export default function Home() {
         console.error('loadMore API error:', data.error || response.status);
         throw new Error(data.error || `Feed API returned ${response.status}`);
       }
-      // Capture scroll RIGHT before React batches the new items into the DOM
-      scrollAnchorY.current = window.scrollY;
-      // Append raw — filteredItems handles global sort so ordering is always correct
+      // Append new items — they land at the end, preserving scroll position naturally
       setFeedItems(prev => [...prev, ...(data.items || [])]);
       setHasMore(data.hasMore || false);
       setNextOffset(data.nextOffset || 0);
@@ -164,15 +159,6 @@ export default function Home() {
     }
   }, [hasMore, nextOffset, profile?.lifeTags, profile?.interests, sortBy]);
 
-  // Immediately after new items paint, restore scroll so viewport doesn't shift
-  useLayoutEffect(() => {
-    if (scrollAnchorY.current !== null) {
-      window.scrollTo({ top: scrollAnchorY.current, behavior: 'instant' });
-      scrollAnchorY.current = null;
-    }
-    // Fires for both federal and state feed appends
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [feedItems.length, stateFeedItems.length]);
 
   // Load more state bills — declared BEFORE IntersectionObserver to avoid TDZ
   const loadMoreState = useCallback(async () => {
@@ -188,8 +174,7 @@ export default function Home() {
       });
       const data = await response.json();
       if (!response.ok) return;
-      scrollAnchorY.current = window.scrollY;
-      // Append raw — filteredItems handles global sort so ordering is always correct
+      // Append new items at end — scroll position preserved naturally
       setStateFeedItems(prev => [...prev, ...(data.items || [])]);
       setStateHasMore(data.hasMore || false);
       setStateNextPage(p => p + 1);
@@ -303,24 +288,22 @@ export default function Home() {
   const canSeeState = isPro || isNative;
 
   const filteredItems = (() => {
-    let items;
     if (activeTab === 'Federal') {
-      items = feedItems.filter(item => item.level === 'Federal');
+      // Server already returns items sorted — just filter, don't re-sort
+      return feedItems.filter(item => item.level === 'Federal');
     } else if (activeTab === 'State & Local') {
-      items = [...stateFeedItems];
+      return [...stateFeedItems];
     } else {
-      // "All Updates" — only include state bills if Pro or native
-      items = canSeeState
-        ? [...feedItems, ...stateFeedItems]
-        : [...feedItems];
+      // "All Updates" — merge federal + state
+      if (!canSeeState) return [...feedItems];
+      // Interleave by impact without re-sorting within each source
+      // (both sources are already sorted by impact from their respective APIs)
+      const merged = [...feedItems, ...stateFeedItems];
+      if (sortBy === 'recent') {
+        return merged.sort((a, b) => new Date(b.latestActionDate || b.updateDate || b.date || 0) - new Date(a.latestActionDate || a.updateDate || a.date || 0));
+      }
+      return merged.sort((a, b) => (impactOrder[a.impactLevel] ?? 3) - (impactOrder[b.impactLevel] ?? 3));
     }
-    // Always sort the full combined list so new batches land in the correct position
-    if (sortBy === 'recent') {
-      return items.sort((a, b) => new Date(b.latestActionDate || b.updateDate || b.date || 0) - new Date(a.latestActionDate || a.updateDate || a.date || 0));
-    }
-    // High Impact filter: globally sort entire list — prevents new-batch High Impact
-    // items from appearing below Moderate/Low items from earlier batches
-    return items.sort((a, b) => (impactOrder[a.impactLevel] ?? 3) - (impactOrder[b.impactLevel] ?? 3));
   })();
 
   return (
