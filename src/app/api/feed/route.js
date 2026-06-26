@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'; // Prevent caching of API responses
 async function fetchWithRetry(url, options = {}, retries = 1) {
     for (let attempt = 0; attempt <= retries; attempt++) {
         try {
-            const res = await fetch(url, { ...options, signal: AbortSignal.timeout(8000) });
+            const res = await fetch(url, { ...options, signal: AbortSignal.timeout(12000) });
             if (res.ok) return res;
             if (attempt < retries && (res.status >= 500 || res.status === 429)) {
                 await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
@@ -282,6 +282,9 @@ export async function POST(request) {
 
     } catch (error) {
         console.error("Error in feed API:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json(
+            { error: 'Feed temporarily unavailable. Please try again.', items: [], hasMore: false },
+            { status: 500 }
+        );
     }
 }
