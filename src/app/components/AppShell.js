@@ -23,10 +23,24 @@ export function useAskAI() { return useContext(AskAIContext); }
 /* --- Simple SVG Icons (inline, no external deps needed) --- */
 const Icons = {
     logo: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10" />
-            <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
-            <path d="M2 12h20" />
+        <svg viewBox="0 0 512 512" width="24" height="24">
+            <defs>
+                <linearGradient id="sidebar-logo-bg" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#3b6de8"/>
+                    <stop offset="100%" stopColor="#9b4fea"/>
+                </linearGradient>
+            </defs>
+            <rect width="512" height="512" rx="112" ry="112" fill="url(#sidebar-logo-bg)"/>
+            <text
+                x="256"
+                y="352"
+                fontFamily="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+                fontSize="288"
+                fontWeight="800"
+                fill="white"
+                textAnchor="middle"
+                dominantBaseline="auto"
+            >C</text>
         </svg>
     ),
     feed: (

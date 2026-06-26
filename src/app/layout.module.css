@@ -46,18 +46,17 @@
 .logoMark {
     width: 32px;
     height: 32px;
-    background: linear-gradient(135deg, var(--cl-primary-500), var(--cl-primary-700));
     border-radius: var(--cl-radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    overflow: hidden;
 }
 
 .logoMark svg {
-    width: 18px;
-    height: 18px;
-    color: var(--cl-white);
+    width: 32px;
+    height: 32px;
 }
 
 .logoText {
