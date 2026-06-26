@@ -207,8 +207,7 @@ export async function POST(request) {
                         { role: "user", content: userPrompt }
                     ],
                     response_format: { type: "json_object" },
-                    timeout: 25000,
-                });
+                }, { signal: AbortSignal.timeout(25000) });
                 const aiResponse = JSON.parse(completion.choices[0].message.content);
                 return aiResponse.bills || [];
             });
