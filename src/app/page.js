@@ -78,7 +78,15 @@ export default function Home() {
           }).catch(() => null), // Network-level failure is non-fatal
         ]);
 
-        const feedData = await feedRes.json();
+        // Safely parse feed response — Vercel sometimes returns HTML error pages
+        let feedData;
+        try {
+          const feedText = await feedRes.text();
+          feedData = JSON.parse(feedText);
+        } catch {
+          console.error('Feed response was not valid JSON — Vercel may have returned an error page');
+          throw new Error('Server temporarily unavailable. Please pull to refresh.');
+        }
         if (!feedRes.ok) throw new Error(feedData.error || 'Failed to fetch feed');
 
         // Safely parse EOs — any failure here is non-fatal
@@ -130,7 +138,14 @@ export default function Home() {
           sortBy, // pass current filter so server uses correct batch size + ordering
         }),
       });
-      const data = await response.json();
+      let data;
+      try {
+        const text = await response.text();
+        data = JSON.parse(text);
+      } catch {
+        console.error('loadMore: response was not valid JSON');
+        throw new Error('Server temporarily unavailable');
+      }
       if (!response.ok) {
         console.error('loadMore API error:', data.error || response.status);
         throw new Error(data.error || `Feed API returned ${response.status}`);

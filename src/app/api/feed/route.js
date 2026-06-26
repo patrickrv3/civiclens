@@ -4,6 +4,28 @@ import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
 export const maxDuration = 60; // Allow up to 60s for OpenAI processing of uncached bills
+export const dynamic = 'force-dynamic'; // Prevent caching of API responses
+
+// Retry helper for external API calls
+async function fetchWithRetry(url, options = {}, retries = 2) {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            const res = await fetch(url, { ...options, signal: AbortSignal.timeout(15000) });
+            if (res.ok) return res;
+            if (attempt < retries && (res.status >= 500 || res.status === 429)) {
+                await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+                continue;
+            }
+            return res; // Return non-ok response for caller to handle
+        } catch (err) {
+            if (attempt < retries) {
+                await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+                continue;
+            }
+            throw err;
+        }
+    }
+}
 
 // --- Firebase init (server-side, reuse existing app) ---
 const firebaseConfig = {
@@ -96,12 +118,15 @@ export async function POST(request) {
             "&sort=updateDate" +
             "&sort_direction=desc" +
             "&format=json";
-        const congressRes = await fetch(congressUrl);
+        const congressRes = await fetchWithRetry(congressUrl);
 
         if (!congressRes.ok) {
-            const errorText = await congressRes.text();
+            const errorText = await congressRes.text().catch(() => 'Unknown error');
             console.error(`Congress API Error: ${congressRes.status} - ${errorText}`);
-            throw new Error(`Congress API Error: ${congressRes.status}`);
+            return NextResponse.json(
+                { error: `Congress API temporarily unavailable. Please try again.`, items: [], hasMore: false },
+                { status: 502 }
+            );
         }
 
         const data = await congressRes.json();
@@ -160,6 +185,7 @@ export async function POST(request) {
         // 4. Only call OpenAI for bills not in cache
         let aiItems = [];
         if (uncachedBills.length > 0) {
+          try {
             const interestsText = interests && interests.length > 0
                 ? "\n\nThe user is interested in these policy topics: " + interests.join(", ") + ". Please classify and prioritize bills related to these topics with higher impact levels."
                 : "";
@@ -172,6 +198,7 @@ export async function POST(request) {
                     { role: "user", content: userPrompt }
                 ],
                 response_format: { type: "json_object" },
+                timeout: 30000, // 30s timeout for OpenAI
             });
 
             const aiResponse = JSON.parse(completion.choices[0].message.content);
@@ -199,6 +226,17 @@ export async function POST(request) {
                     });
                 }
             });
+          } catch (aiError) {
+            console.error('OpenAI processing failed:', aiError.message);
+            // If we have cached items, serve those — partial data is better than no data
+            if (cachedItems.length === 0) {
+                return NextResponse.json(
+                    { error: 'AI processing temporarily unavailable. Please try again.', items: [], hasMore: false },
+                    { status: 502 }
+                );
+            }
+            // Otherwise continue with cached items only
+          }
         }
 
         // 6. Merge cached + fresh items, and attach the real updateDate from Congress.gov
