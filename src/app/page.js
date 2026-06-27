@@ -288,22 +288,22 @@ export default function Home() {
   const canSeeState = isPro || isNative;
 
   const filteredItems = (() => {
+    let items;
     if (activeTab === 'Federal') {
-      // Server already returns items sorted — just filter, don't re-sort
-      return feedItems.filter(item => item.level === 'Federal');
+      items = feedItems.filter(item => item.level === 'Federal');
     } else if (activeTab === 'State & Local') {
-      return [...stateFeedItems];
+      items = [...stateFeedItems];
     } else {
       // "All Updates" — merge federal + state
-      if (!canSeeState) return [...feedItems];
-      // Interleave by impact without re-sorting within each source
-      // (both sources are already sorted by impact from their respective APIs)
-      const merged = [...feedItems, ...stateFeedItems];
-      if (sortBy === 'recent') {
-        return merged.sort((a, b) => new Date(b.latestActionDate || b.updateDate || b.date || 0) - new Date(a.latestActionDate || a.updateDate || a.date || 0));
-      }
-      return merged.sort((a, b) => (impactOrder[a.impactLevel] ?? 3) - (impactOrder[b.impactLevel] ?? 3));
+      items = canSeeState
+        ? [...feedItems, ...stateFeedItems]
+        : [...feedItems];
     }
+    // Sort based on the active filter
+    if (sortBy === 'recent') {
+      return [...items].sort((a, b) => new Date(b.latestActionDate || b.updateDate || b.date || 0) - new Date(a.latestActionDate || a.updateDate || a.date || 0));
+    }
+    return [...items].sort((a, b) => (impactOrder[a.impactLevel] ?? 3) - (impactOrder[b.impactLevel] ?? 3));
   })();
 
   return (
