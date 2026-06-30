@@ -5,6 +5,7 @@ import styles from './CourtRulings.module.css';
 import FeedCard from './FeedCard';
 import { useProfile } from '../context/ProfileContext';
 import { useSubscription } from '../context/SubscriptionContext';
+import { useCourtRulings } from '../context/CourtRulingsContext';
 import UpgradeModal from './UpgradeModal';
 
 const PAGE_SIZE = 10;
@@ -12,10 +13,8 @@ const PAGE_SIZE = 10;
 export default function CourtRulings() {
     const { profile } = useProfile();
     const { isPro } = useSubscription();
+    const { rulings, isLoading, error } = useCourtRulings();
 
-    const [rulings, setRulings] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState('');
     const [courtFilter, setCourtFilter] = useState('all');
     const [sortBy, setSortBy] = useState('recent');
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -25,34 +24,6 @@ export default function CourtRulings() {
 
     const isNative = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
     const canSeeAll = isPro || isNative;
-
-    // Fetch all rulings on mount
-    useEffect(() => {
-        async function fetchRulings() {
-            setIsLoading(true);
-            setError('');
-            try {
-                const res = await fetch('/api/court-rulings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        lifeTags: profile.lifeTags || [],
-                        interests: profile.interests || [],
-                    }),
-                });
-                if (!res.ok) throw new Error(`API error: ${res.status}`);
-                const data = await res.json();
-                if (data.error) throw new Error(data.error);
-                setRulings(data.items || []);
-            } catch (err) {
-                console.error('Court rulings fetch error:', err);
-                setError(err.message);
-            } finally {
-                setIsLoading(false);
-            }
-        }
-        fetchRulings();
-    }, [profile.lifeTags, profile.interests]);
 
     // Reset visible count when filters change
     useEffect(() => {
