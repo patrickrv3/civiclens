@@ -10,6 +10,9 @@ import UpgradeModal from './UpgradeModal';
 
 const PAGE_SIZE = 10;
 
+// Court tabs that require Pro on web
+const PRO_COURTS = new Set(['federal_appeals', 'district']);
+
 export default function CourtRulings() {
     const { profile } = useProfile();
     const { isPro } = useSubscription();
@@ -33,6 +36,8 @@ export default function CourtRulings() {
     // Apply filters and sorting
     const filteredRulings = rulings
         .filter(item => {
+            // Non-Pro web users can only see SCOTUS rulings
+            if (!canSeeAll && item.courtType !== 'scotus') return false;
             if (courtFilter !== 'all' && item.courtType !== courtFilter) return false;
             return true;
         })
@@ -49,10 +54,19 @@ export default function CourtRulings() {
 
     // Count items per court for badges
     const courtCounts = {
-        all: rulings.length,
+        all: canSeeAll ? rulings.length : rulings.filter(r => r.courtType === 'scotus').length,
         scotus: rulings.filter(r => r.courtType === 'scotus').length,
         federal_appeals: rulings.filter(r => r.courtType === 'federal_appeals').length,
         district: rulings.filter(r => r.courtType === 'district').length,
+    };
+
+    // Handle court filter click — intercept locked tabs for non-Pro web users
+    const handleCourtFilter = (courtId) => {
+        if (!canSeeAll && PRO_COURTS.has(courtId)) {
+            setShowUpgradeModal(true);
+            return;
+        }
+        setCourtFilter(courtId);
     };
 
     // Infinite scroll with IntersectionObserver
@@ -91,16 +105,17 @@ export default function CourtRulings() {
                     {[
                         { id: 'all', label: 'All Courts' },
                         { id: 'scotus', label: 'Supreme Court' },
-                        { id: 'federal_appeals', label: 'Appeals' },
-                        { id: 'district', label: 'D.C. District' },
+                        { id: 'federal_appeals', label: 'Appeals', locked: !canSeeAll },
+                        { id: 'district', label: 'D.C. District', locked: !canSeeAll },
                     ].map(f => (
                         <button
                             key={f.id}
                             className={`${styles.filterPill} ${courtFilter === f.id ? styles.filterPillActive : ''}`}
-                            onClick={() => setCourtFilter(f.id)}
+                            onClick={() => handleCourtFilter(f.id)}
                         >
                             {f.label}
-                            {courtCounts[f.id] > 0 && (
+                            {f.locked && <span style={{ fontSize: '0.7rem', marginLeft: '4px' }}>🔒</span>}
+                            {!f.locked && courtCounts[f.id] > 0 && (
                                 <span className={styles.countBadge}>{courtCounts[f.id]}</span>
                             )}
                         </button>
@@ -122,6 +137,47 @@ export default function CourtRulings() {
                     ))}
                 </div>
             </div>
+
+            {/* Pro upsell banner — show for non-Pro web users */}
+            {!canSeeAll && (
+                <div style={{
+                    margin: '0 0 16px',
+                    padding: '14px 18px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(168,85,247,0.08))',
+                    border: '1px solid rgba(99,102,241,0.15)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    flexWrap: 'wrap',
+                }}>
+                    <div>
+                        <div style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--cl-gray-900)', marginBottom: '2px' }}>
+                            🔒 Appeals &amp; D.C. District Courts
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--cl-gray-500)' }}>
+                            Upgrade to Pro to access all federal court rulings
+                        </div>
+                    </div>
+                    <button
+                        style={{
+                            padding: '8px 18px',
+                            borderRadius: '8px',
+                            border: 'none',
+                            background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                            color: '#fff',
+                            fontWeight: 600,
+                            fontSize: '0.82rem',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                        }}
+                        onClick={() => setShowUpgradeModal(true)}
+                    >
+                        Upgrade to Pro
+                    </button>
+                </div>
+            )}
 
             {/* Loading State */}
             {isLoading && (
@@ -170,9 +226,9 @@ export default function CourtRulings() {
                     {!hasMore && (
                         <div className={styles.endOfList}>
                             <div className={styles.endOfListIcon}>⚖️</div>
-                            <div className={styles.endOfListTitle}>You're all caught up!</div>
+                            <div className={styles.endOfListTitle}>You&apos;re all caught up!</div>
                             <div className={styles.endOfListText}>
-                                You've seen all {filteredRulings.length} ruling{filteredRulings.length !== 1 ? 's' : ''}{courtFilter !== 'all' ? ' in this court' : ''}. New rulings are added every 6 hours.
+                                You&apos;ve seen all {filteredRulings.length} ruling{filteredRulings.length !== 1 ? 's' : ''}{courtFilter !== 'all' ? ' in this court' : ''}. New rulings are added every 6 hours.
                             </div>
                         </div>
                     )}
