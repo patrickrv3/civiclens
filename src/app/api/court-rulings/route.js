@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import pdfParse from 'pdf-parse';
 
 export const maxDuration = 60;
 
@@ -272,40 +273,25 @@ async function fetchOpinionText(opinionId, downloadUrl) {
         }
     }
 
-    // Strategy 2: Try fetching the PDF from supremecourt.gov (no rate limit)
-    if (downloadUrl && downloadUrl.includes('supremecourt.gov')) {
+    // Strategy 2: Try fetching the PDF directly (works for supremecourt.gov, no rate limit)
+    if (downloadUrl) {
         try {
+            console.log(`[PDF] Fetching from ${downloadUrl}`);
             const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 10000);
+            const timeout = setTimeout(() => controller.abort(), 15000);
             const res = await fetch(downloadUrl, { signal: controller.signal });
             clearTimeout(timeout);
             if (res.ok) {
-                const buffer = await res.arrayBuffer();
-                const bytes = new Uint8Array(buffer);
-                // Simple PDF text extraction — find text between parentheses in PDF stream
-                // This works for text-based PDFs like SCOTUS opinions
-                let text = '';
-                let inParen = false;
-                for (let i = 0; i < bytes.length && text.length < 5000; i++) {
-                    const ch = bytes[i];
-                    if (ch === 0x28) { inParen = true; continue; } // (
-                    if (ch === 0x29) { // )
-                        if (inParen) text += ' ';
-                        inParen = false;
-                        continue;
-                    }
-                    if (inParen && ch >= 32 && ch < 127) {
-                        text += String.fromCharCode(ch);
-                    }
-                }
-                text = text.replace(/\s+/g, ' ').trim();
+                const buffer = Buffer.from(await res.arrayBuffer());
+                const parsed = await pdfParse(buffer, { max: 5 }); // Parse first 5 pages
+                const text = (parsed.text || '').replace(/\s+/g, ' ').trim();
                 if (text.length > 200) {
                     console.log(`[PDF] Extracted ${text.length} chars from ${downloadUrl}`);
-                    return text.substring(0, 3000);
+                    return text.substring(0, 4000); // More text for better AI analysis
                 }
             }
         } catch (err) {
-            console.warn(`[PDF] Failed to fetch:`, err.message);
+            console.warn(`[PDF] Failed to parse:`, err.message);
         }
     }
 
