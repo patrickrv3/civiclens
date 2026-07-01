@@ -37,7 +37,7 @@ export default function Home() {
   const [stateHasMore, setStateHasMore] = useState(false);
   const [stateNextPage, setStateNextPage] = useState(2);
   const [stateInfo, setStateInfo] = useState(null);
-  const hasLoadedOnce = useRef(false);
+
   const hasLoadedState = useRef(false);
   const sentinelRef = useRef(null);
   const isLoadingMoreRef = useRef(false);
@@ -208,13 +208,13 @@ export default function Home() {
   }, [hasMore, loadMore, stateHasMore, loadMoreState, activeTab]);
 
 
-  // Layer 2: Fast re-personalize tag impacts when profile tags change
+  // Layer 2: Personalize tag impacts — runs on initial load AND when lifeTags change
+  // Only triggers when user has lifeTags AND wants personalization.
+  // The personalize API caches by lifeTag hash, so shared tag combos = no AI cost.
   useEffect(() => {
-    if (!hasLoadedOnce.current) {
-      hasLoadedOnce.current = true;
-      return; // Skip first render — base feed already handles initial tags
-    }
     if (feedItems.length === 0) return;
+    if (!profile?.wantsPersonalizedImpact) return;
+    if (!profile?.lifeTags || profile.lifeTags.length === 0) return;
 
     async function rePersonalize() {
       setIsPersonalizing(true);
@@ -243,7 +243,7 @@ export default function Home() {
     }
     rePersonalize();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.lifeTags]);
+  }, [profile?.lifeTags, profile?.wantsPersonalizedImpact, feedItems.length]);
 
   // Fetch state bills on mount (alongside federal bills) when zip code is available
   useEffect(() => {
