@@ -155,7 +155,7 @@ export async function GET(request) {
         const rulingsRes = await fetch(`${baseUrl}/api/court-rulings`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lifeTags: [], interests: [] }),
+            body: JSON.stringify({ lifeTags: [], interests: [], forceRefresh: true }),
             signal: AbortSignal.timeout(55000), // Allow up to 55s (within our 60s maxDuration)
         });
         if (rulingsRes.ok) {

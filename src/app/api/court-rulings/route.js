@@ -233,7 +233,7 @@ async function processWithAI(opinions, lifeTags, interests) {
 
 export async function POST(request) {
     try {
-        const { lifeTags, interests } = await request.json();
+        const { lifeTags, interests, forceRefresh } = await request.json();
 
         // Step 1: Check if any court cache needs refreshing
         const [scotusCache, appealsCache, districtCache] = await Promise.all([
@@ -243,7 +243,7 @@ export async function POST(request) {
         ]);
 
         const now = Date.now();
-        const needsRefresh =
+        const needsRefresh = forceRefresh ||
             (now - scotusCache.fetchedAt > REFRESH_INTERVAL_MS) ||
             (now - appealsCache.fetchedAt > REFRESH_INTERVAL_MS) ||
             (now - districtCache.fetchedAt > REFRESH_INTERVAL_MS);
