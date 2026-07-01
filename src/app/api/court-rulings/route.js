@@ -411,13 +411,60 @@ export async function POST(request) {
         // Load all summaries from Firestore
         const summaries = await Promise.all(finalIds.map(getCachedSummary));
         const items = [];
+        const missingIds = [];
         finalIds.forEach((id, i) => {
             if (summaries[i]) {
                 // Force courtType from the ID pattern
                 const courtType = getCourtTypeFromId(id, summaries[i]);
                 items.push({ ...summaries[i], courtType });
+            } else {
+                missingIds.push(id);
             }
         });
+
+        // Step 7: Re-process any items whose summaries are missing from cache
+        if (missingIds.length > 0) {
+            console.log(`[Recovery] ${missingIds.length} items missing from cache, re-fetching...`);
+            try {
+                // Fetch fresh from CourtListener to get the shaped data for these items
+                const latest = await fetchLatest();
+                const allLatest = [...latest.scotus, ...latest.appeals, ...latest.district];
+                const missingSet = new Set(missingIds);
+                const missingItems = allLatest.filter(item => missingSet.has(item.id));
+
+                if (missingItems.length > 0) {
+                    console.log(`[Recovery] Found ${missingItems.length} items to re-process`);
+                    const courtTypeMap = {};
+                    missingItems.forEach(item => { courtTypeMap[item.id] = item.courtType; });
+
+                    const recovered = await processWithAI(missingItems, lifeTags, interests)
+                        .catch(e => { console.error('[Recovery] AI failed:', e.message); return []; });
+
+                    // Cache and add to results
+                    await Promise.all(recovered.map(item => {
+                        if (item.id) {
+                            return cacheSummary(item.id, {
+                                ...item,
+                                courtType: courtTypeMap[item.id] || item.courtType,
+                                sponsors: [], locationMatches: [],
+                                likes: 0, dislikes: 0,
+                            });
+                        }
+                        return Promise.resolve();
+                    }));
+
+                    recovered.forEach(item => {
+                        if (item.id) {
+                            const courtType = courtTypeMap[item.id] || item.courtType;
+                            items.push({ ...item, courtType });
+                        }
+                    });
+                    console.log(`[Recovery] Recovered ${recovered.length} items`);
+                }
+            } catch (err) {
+                console.error('[Recovery] Failed:', err.message);
+            }
+        }
 
         console.log(`[Done] ${items.length} valid items returned`);
 
