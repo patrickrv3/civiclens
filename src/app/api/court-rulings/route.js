@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
-import pdfParse from 'pdf-parse';
 
 export const maxDuration = 60;
 
@@ -283,6 +282,8 @@ async function fetchOpinionText(opinionId, downloadUrl) {
             clearTimeout(timeout);
             if (res.ok) {
                 const buffer = Buffer.from(await res.arrayBuffer());
+                const pdfModule = await import('pdf-parse');
+                const pdfParse = pdfModule.default || pdfModule;
                 const parsed = await pdfParse(buffer, { max: 5 }); // Parse first 5 pages
                 const text = (parsed.text || '').replace(/\s+/g, ' ').trim();
                 if (text.length > 200) {
