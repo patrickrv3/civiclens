@@ -103,7 +103,7 @@ export async function GET(request) {
             const bills = (data.bills || []).sort((a, b) => new Date(b.updateDate) - new Date(a.updateDate));
 
             const forProcessing = bills.map(b => {
-                const congressNum = b.congress || 119;
+                const congressNum = b.congress || 118;
                 const typeUpper = (b.type || 'HR').toUpperCase();
                 const slug = typeSlugMap[typeUpper] || 'house-bill';
                 return {
@@ -128,7 +128,13 @@ export async function GET(request) {
                     ],
                     response_format: { type: 'json_object' },
                 }, { signal: AbortSignal.timeout(45000) });
-                const parsed = JSON.parse(completion.choices[0].message.content);
+                let parsed;
+                try {
+                    parsed = JSON.parse(completion.choices[0].message.content);
+                } catch (parseErr) {
+                    console.warn('[AI] Failed to parse AI response for bills:', parseErr.message);
+                    continue;
+                }
                 const aiItems = parsed.bills || [];
                 await Promise.all(aiItems.map(item => item.id ? saveToCache(item) : Promise.resolve()));
                 billsWarmed += aiItems.length;
@@ -168,7 +174,13 @@ export async function GET(request) {
                     ],
                     response_format: { type: 'json_object' },
                 }, { signal: AbortSignal.timeout(45000) });
-                const parsed = JSON.parse(completion.choices[0].message.content);
+                let parsed;
+                try {
+                    parsed = JSON.parse(completion.choices[0].message.content);
+                } catch (parseErr) {
+                    console.warn('[AI] Failed to parse AI response for EOs:', parseErr.message);
+                    parsed = {};
+                }
                 const aiItems = parsed.orders || [];
                 await Promise.all(aiItems.map(item => item.id ? saveToCache(item) : Promise.resolve()));
                 eosWarmed += aiItems.length;

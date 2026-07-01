@@ -6,6 +6,31 @@ import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 export const maxDuration = 60; // Allow up to 60s for OpenAI processing of uncached bills
 export const dynamic = 'force-dynamic'; // Prevent caching of API responses
 
+// Simple in-memory rate limiter
+const rateLimitMap = new Map();
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const RATE_LIMIT_MAX = 10; // max requests per window
+
+function checkRateLimit(ip) {
+    const now = Date.now();
+    const entry = rateLimitMap.get(ip);
+    if (!entry || now - entry.start > RATE_LIMIT_WINDOW_MS) {
+        rateLimitMap.set(ip, { start: now, count: 1 });
+        return true;
+    }
+    entry.count++;
+    if (entry.count > RATE_LIMIT_MAX) return false;
+    return true;
+}
+
+// Clean up old entries periodically
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, entry] of rateLimitMap) {
+        if (now - entry.start > RATE_LIMIT_WINDOW_MS) rateLimitMap.delete(ip);
+    }
+}, 60000);
+
 // Retry helper for external API calls
 async function fetchWithRetry(url, options = {}, retries = 1) {
     for (let attempt = 0; attempt <= retries; attempt++) {
@@ -91,6 +116,11 @@ async function cacheSummary(billId, summaryData) {
 }
 
 export async function POST(request) {
+    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    if (!checkRateLimit(ip)) {
+        return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+    }
+
     try {
         const { lifeTags, interests, offset, sortBy } = await request.json();
         const pageOffset = offset || 0;
@@ -208,7 +238,13 @@ export async function POST(request) {
                     ],
                     response_format: { type: "json_object" },
                 }, { signal: AbortSignal.timeout(45000) });
-                const aiResponse = JSON.parse(completion.choices[0].message.content);
+                let aiResponse;
+                try {
+                    aiResponse = JSON.parse(completion.choices[0].message.content);
+                } catch (parseErr) {
+                    console.warn('[AI] Failed to parse AI response for feed chunk:', parseErr.message);
+                    return [];
+                }
                 return aiResponse.bills || [];
             });
 

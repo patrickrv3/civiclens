@@ -5,6 +5,31 @@ import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
 export const maxDuration = 60;
 
+// Simple in-memory rate limiter
+const rateLimitMap = new Map();
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const RATE_LIMIT_MAX = 10; // max requests per window
+
+function checkRateLimit(ip) {
+    const now = Date.now();
+    const entry = rateLimitMap.get(ip);
+    if (!entry || now - entry.start > RATE_LIMIT_WINDOW_MS) {
+        rateLimitMap.set(ip, { start: now, count: 1 });
+        return true;
+    }
+    entry.count++;
+    if (entry.count > RATE_LIMIT_MAX) return false;
+    return true;
+}
+
+// Clean up old entries periodically
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, entry] of rateLimitMap) {
+        if (now - entry.start > RATE_LIMIT_WINDOW_MS) rateLimitMap.delete(ip);
+    }
+}, 60000);
+
 const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
     authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -171,7 +196,7 @@ async function fetchCL(url, label) {
 }
 
 /**
- * Fetch latest 20 opinions per court (3 parallel API calls).
+ * Fetch latest 30 opinions per court (3 parallel API calls).
  * Returns { scotus: [...], appeals: [...], district: [...] }
  */
 async function fetchLatest() {
@@ -184,6 +209,7 @@ async function fetchLatest() {
         p.append('order_by', 'dateFiled desc');
         p.append('filed_after', filedAfter);
         courts.forEach(c => p.append('court', c));
+        p.append('page_size', '30');
         return `https://www.courtlistener.com/api/rest/v4/search/?${p.toString()}`;
     };
 
@@ -346,7 +372,13 @@ async function processWithAI(enrichedOpinions, lifeTags, interests) {
         response_format: { type: 'json_object' },
     }, { signal: AbortSignal.timeout(50000) });
 
-    const parsed = JSON.parse(completion.choices[0].message.content);
+    let parsed;
+    try {
+        parsed = JSON.parse(completion.choices[0].message.content);
+    } catch (parseErr) {
+        console.warn('[AI] Failed to parse AI response:', parseErr.message);
+        return [];
+    }
     const aiResults = parsed.rulings || [];
 
     // Enforce original dates from CourtListener (AI sometimes changes them)
@@ -360,6 +392,11 @@ async function processWithAI(enrichedOpinions, lifeTags, interests) {
 // ── Main handler ──
 
 export async function POST(request) {
+    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    if (!checkRateLimit(ip)) {
+        return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+    }
+
     try {
         const { lifeTags, interests, forceRefresh } = await request.json();
 
@@ -381,7 +418,7 @@ export async function POST(request) {
         if (needsRefresh) {
             console.log('[Refresh] Fetching latest from CourtListener...');
 
-            // Step 2: Fetch latest 20 per court
+            // Step 2: Fetch latest 30 per court
             const latest = await fetchLatest();
             console.log(`[Fetched] SCOTUS=${latest.scotus.length} Appeals=${latest.appeals.length} District=${latest.district.length}`);
 

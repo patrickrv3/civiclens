@@ -228,7 +228,7 @@ export default function CourtRulings() {
                             <div className={styles.endOfListIcon}>⚖️</div>
                             <div className={styles.endOfListTitle}>You&apos;re all caught up!</div>
                             <div className={styles.endOfListText}>
-                                You&apos;ve seen all {filteredRulings.length} ruling{filteredRulings.length !== 1 ? 's' : ''}{courtFilter !== 'all' ? ' in this court' : ''}. New rulings are added every 6 hours.
+                                You&apos;ve seen all {filteredRulings.length} ruling{filteredRulings.length !== 1 ? 's' : ''}{courtFilter !== 'all' ? ' in this court' : ''}. New rulings are added daily.
                             </div>
                         </div>
                     )}
