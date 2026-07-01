@@ -117,27 +117,43 @@ async function saveCourtCache(courtType, ids) {
     } catch (e) { console.warn(`Court cache save failed (${courtType}):`, e.message); }
 }
 
+// ── Helpers ──
+const delay = (ms) => new Promise(r => setTimeout(r, ms));
+
 // ── CourtListener fetch ──
 
 async function fetchCL(url, label) {
     console.log(`[CL] ${label}:`, url);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
-    try {
-        const res = await fetch(url, {
-            headers: { Authorization: `Token ${process.env.COURTLISTENER_API_TOKEN}` },
-            signal: controller.signal,
-        });
-        clearTimeout(timeout);
-        if (!res.ok) { console.error(`[CL] ${label} error: ${res.status}`); return []; }
-        const data = await res.json();
-        console.log(`[CL] ${label}: ${(data.results || []).length} results`);
-        return data.results || [];
-    } catch (err) {
-        clearTimeout(timeout);
-        console.error(`[CL] ${label} failed:`, err.message);
-        return [];
+    for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) {
+            const backoff = 2000 * attempt;
+            console.log(`[CL] ${label}: retrying in ${backoff}ms (attempt ${attempt + 1})`);
+            await delay(backoff);
+        }
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 20000);
+        try {
+            const res = await fetch(url, {
+                headers: { Authorization: `Token ${process.env.COURTLISTENER_API_TOKEN}` },
+                signal: controller.signal,
+            });
+            clearTimeout(timeout);
+            if (res.status === 429) {
+                console.warn(`[CL] ${label}: rate limited (429), attempt ${attempt + 1}`);
+                continue;
+            }
+            if (!res.ok) { console.error(`[CL] ${label} error: ${res.status}`); return []; }
+            const data = await res.json();
+            console.log(`[CL] ${label}: ${(data.results || []).length} results`);
+            return data.results || [];
+        } catch (err) {
+            clearTimeout(timeout);
+            console.error(`[CL] ${label} failed:`, err.message);
+            if (attempt < 2) continue;
+            return [];
+        }
     }
+    return [];
 }
 
 /**
@@ -195,6 +211,7 @@ function shapeOpinion(opinion) {
         suitNature: opinion.suitNature || opinion.suit_nature || '',
         citeCount: opinion.citeCount || opinion.citation_count || 0,
         opinionId: firstOpinion?.id || null,
+        downloadUrl: firstOpinion?.download_url || '',
         judge: opinion.judge || '',
     };
 }
@@ -220,47 +237,94 @@ function mergeCourtItems(existingIds, newShaped) {
 
 // ── Fetch opinion text for richer AI summaries ──
 
-async function fetchOpinionText(opinionId) {
-    if (!opinionId) return '';
+async function fetchOpinionText(opinionId, downloadUrl) {
     const token = process.env.COURTLISTENER_API_TOKEN;
-    if (!token) return '';
-    try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000);
-        const res = await fetch(`https://www.courtlistener.com/api/rest/v4/opinions/${opinionId}/`, {
-            headers: { Authorization: `Token ${token}` },
-            signal: controller.signal,
-        });
-        clearTimeout(timeout);
-        if (!res.ok) return '';
-        const data = await res.json();
-        // Get plain text or strip HTML tags from html_with_citations
-        let text = data.plain_text || '';
-        if (!text && data.html_with_citations) {
-            text = data.html_with_citations.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+
+    // Strategy 1: Try CourtListener opinions API (authenticated, has full text)
+    if (opinionId && token) {
+        for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+                if (attempt > 0) await delay(2000); // Back off on retry
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 10000);
+                const res = await fetch(`https://www.courtlistener.com/api/rest/v4/opinions/${opinionId}/`, {
+                    headers: { Authorization: `Token ${token}` },
+                    signal: controller.signal,
+                });
+                clearTimeout(timeout);
+                if (res.status === 429) {
+                    console.warn(`[CL] Rate limited on opinion ${opinionId}, attempt ${attempt + 1}`);
+                    continue; // Retry after delay
+                }
+                if (!res.ok) break; // Other error, try fallback
+                const data = await res.json();
+                let text = data.plain_text || '';
+                if (!text && data.html_with_citations) {
+                    text = data.html_with_citations.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+                }
+                if (!text && data.html) {
+                    text = data.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+                }
+                if (text.trim()) return text.substring(0, 3000).trim();
+            } catch (err) {
+                console.warn(`[CL] Opinion text attempt ${attempt + 1} failed for ${opinionId}:`, err.message);
+            }
         }
-        if (!text && data.html) {
-            text = data.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-        }
-        // Return first ~3000 chars (syllabus + beginning of opinion)
-        return text.substring(0, 3000).trim();
-    } catch (err) {
-        console.warn(`[CL] Opinion text fetch failed for ${opinionId}:`, err.message);
-        return '';
     }
+
+    // Strategy 2: Try fetching the PDF from supremecourt.gov (no rate limit)
+    if (downloadUrl && downloadUrl.includes('supremecourt.gov')) {
+        try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 10000);
+            const res = await fetch(downloadUrl, { signal: controller.signal });
+            clearTimeout(timeout);
+            if (res.ok) {
+                const buffer = await res.arrayBuffer();
+                const bytes = new Uint8Array(buffer);
+                // Simple PDF text extraction — find text between parentheses in PDF stream
+                // This works for text-based PDFs like SCOTUS opinions
+                let text = '';
+                let inParen = false;
+                for (let i = 0; i < bytes.length && text.length < 5000; i++) {
+                    const ch = bytes[i];
+                    if (ch === 0x28) { inParen = true; continue; } // (
+                    if (ch === 0x29) { // )
+                        if (inParen) text += ' ';
+                        inParen = false;
+                        continue;
+                    }
+                    if (inParen && ch >= 32 && ch < 127) {
+                        text += String.fromCharCode(ch);
+                    }
+                }
+                text = text.replace(/\s+/g, ' ').trim();
+                if (text.length > 200) {
+                    console.log(`[PDF] Extracted ${text.length} chars from ${downloadUrl}`);
+                    return text.substring(0, 3000);
+                }
+            }
+        } catch (err) {
+            console.warn(`[PDF] Failed to fetch:`, err.message);
+        }
+    }
+
+    return '';
 }
 
 async function enrichWithOpinionText(items) {
-    // Fetch opinion text for all items in parallel
-    const enriched = await Promise.allSettled(
-        items.map(async (item) => {
-            const opinionText = await fetchOpinionText(item.opinionId);
-            return { ...item, opinionText: opinionText || '(No opinion text available — summarize based on case name and context)' };
-        })
-    );
-    return enriched
-        .filter(r => r.status === 'fulfilled')
-        .map(r => r.value);
+    // Fetch opinion text SEQUENTIALLY with small delays to avoid rate limits
+    const enriched = [];
+    for (const item of items) {
+        const opinionText = await fetchOpinionText(item.opinionId, item.downloadUrl);
+        enriched.push({
+            ...item,
+            opinionText: opinionText || '(No opinion text available — summarize based on case name and context)',
+        });
+        // Small delay between requests to avoid rate limiting
+        if (items.length > 1) await delay(500);
+    }
+    return enriched;
 }
 
 // ── AI processing helper ──
