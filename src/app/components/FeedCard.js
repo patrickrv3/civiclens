@@ -119,7 +119,13 @@ export default function FeedCard({ item, profile }) {
                     <span className={styles.feedTime}>{item.level} • {(() => {
                         const d = item.latestActionDate || item.updateDate || item.date;
                         if (!d) return '';
-                        return `Last action: ${new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+                        // Parse date-only strings (YYYY-MM-DD) as local dates to avoid timezone shift
+                        const dateStr = typeof d === 'string' ? d : '';
+                        const parts = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                        const dateObj = parts
+                            ? new Date(parseInt(parts[1]), parseInt(parts[2]) - 1, parseInt(parts[3]))
+                            : new Date(d);
+                        return `Last action: ${dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
                     })()}</span>
                 </div>
                 <div className={styles.badgeRow}>
@@ -160,8 +166,13 @@ export default function FeedCard({ item, profile }) {
                     'Dismissed': { bg: '#f3f4f6', color: '#4b5563' },
                     'Overruled': { bg: '#fee2e2', color: '#dc2626' },
                     'Upheld': { bg: '#dcfce7', color: '#16a34a' },
+                    'Struck Down': { bg: '#fee2e2', color: '#dc2626' },
+                    'Blocked': { bg: '#fee2e2', color: '#dc2626' },
                     'Injunction Granted': { bg: '#fef3c7', color: '#d97706' },
                     'Injunction Denied': { bg: '#f3f4f6', color: '#4b5563' },
+                    'Decision Issued': { bg: '#dbeafe', color: '#1d4ed8' },
+                    'Not Available': { bg: '#f3f4f6', color: '#6b7280' },
+                    'Unclear': { bg: '#f3f4f6', color: '#6b7280' },
                 };
                 const sc = statusColors[item.status] || statusColors['Introduced'];
                 return (
