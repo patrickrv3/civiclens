@@ -146,11 +146,34 @@ export async function GET(request) {
         errors.push(`Executive orders failed: ${err.message}`);
     }
 
-    console.log(`Cache warm complete: ${billsWarmed} bills, ${eosWarmed} EOs warmed. Errors: ${errors.length}`);
+    // ── 3. Warm court rulings (trigger the court-rulings API refresh) ────────
+    let rulingsWarmed = 0;
+    try {
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.VERCEL_URL
+            ? `https://${process.env.VERCEL_URL}`
+            : 'http://localhost:3000';
+        const rulingsRes = await fetch(`${baseUrl}/api/court-rulings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lifeTags: [], interests: [] }),
+            signal: AbortSignal.timeout(55000), // Allow up to 55s (within our 60s maxDuration)
+        });
+        if (rulingsRes.ok) {
+            const rulingsData = await rulingsRes.json();
+            rulingsWarmed = (rulingsData.items || []).length;
+        } else {
+            errors.push(`Court rulings API returned ${rulingsRes.status}`);
+        }
+    } catch (err) {
+        errors.push(`Court rulings warm failed: ${err.message}`);
+    }
+
+    console.log(`Cache warm complete: ${billsWarmed} bills, ${eosWarmed} EOs, ${rulingsWarmed} rulings warmed. Errors: ${errors.length}`);
     return NextResponse.json({
         success: true,
         billsWarmed,
         eosWarmed,
+        rulingsWarmed,
         errors,
         timestamp: new Date().toISOString(),
     });

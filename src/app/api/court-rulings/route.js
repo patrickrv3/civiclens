@@ -17,7 +17,7 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0
 const db = getFirestore(app);
 
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days — court rulings don't change once published
-const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours between CourtListener fetches
+const REFRESH_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours between CourtListener fetches
 const MAX_PER_COURT = 50; // Rolling window: keep top 50 per court
 
 // Court lists
