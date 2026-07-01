@@ -120,6 +120,7 @@ async function saveCourtCache(courtType, ids, shapedItems) {
                 caseName: item.caseName || '',
                 court: item.court || '',
                 courtType: item.courtType || '',
+                url: item.url || '',
             };
         });
         await setDoc(doc(db, 'billSummaries', key), {
@@ -328,12 +329,8 @@ async function enrichWithOpinionText(items) {
 
 // ── AI processing helper ──
 
-async function processWithAI(opinions, lifeTags, interests) {
-    if (opinions.length === 0) return [];
-
-    // Enrich with opinion text before sending to AI
-    const enrichedOpinions = await enrichWithOpinionText(opinions);
-    console.log(`[AI] Enriched ${enrichedOpinions.filter(o => o.opinionText && !o.opinionText.startsWith('(')).length}/${enrichedOpinions.length} items with opinion text`);
+async function processWithAI(enrichedOpinions, lifeTags, interests) {
+    if (enrichedOpinions.length === 0) return [];
 
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || '' });
     const userPrompt = `Analyze these court rulings using the provided opinionText. Generate tagImpacts for Life Tags: ${(lifeTags || []).join(', ') || 'None'}.${
@@ -402,26 +399,42 @@ export async function POST(request) {
                 ...districtMerge.newItems,
             ];
 
-            // Step 4: AI-process new items (in batches of 17)
+            // Cap new items per request to avoid overwhelming OpenAI / timing out
+            const MAX_NEW_PER_REQUEST = 15;
+            if (allNewItems.length > MAX_NEW_PER_REQUEST) {
+                console.log(`[Cap] ${allNewItems.length} new items found, processing ${MAX_NEW_PER_REQUEST} now, deferring ${allNewItems.length - MAX_NEW_PER_REQUEST} to next refresh`);
+                allNewItems = allNewItems.slice(0, MAX_NEW_PER_REQUEST);
+            }
+
+            // Step 4: Enrich ALL new items with opinion text ONCE (sequential, rate-limit safe)
             const courtTypeMap = {};
             allNewItems.forEach(item => { courtTypeMap[item.id] = item.courtType; });
 
             if (allNewItems.length > 0) {
+                const enrichedItems = await enrichWithOpinionText(allNewItems);
+                console.log(`[AI] Enriched ${enrichedItems.filter(o => o.opinionText && !o.opinionText.startsWith('(')).length}/${enrichedItems.length} items with opinion text`);
+
+                // Batch enriched items for AI processing
                 const BATCH_SIZE = 17;
                 const batches = [];
-                for (let i = 0; i < allNewItems.length; i += BATCH_SIZE) {
-                    batches.push(allNewItems.slice(i, i + BATCH_SIZE));
+                for (let i = 0; i < enrichedItems.length; i += BATCH_SIZE) {
+                    batches.push(enrichedItems.slice(i, i + BATCH_SIZE));
                 }
-                console.log(`[AI] ${allNewItems.length} new items → ${batches.length} batches of [${batches.map(b => b.length).join(', ')}]`);
+                console.log(`[AI] ${enrichedItems.length} new items → ${batches.length} batches of [${batches.map(b => b.length).join(', ')}]`);
 
-                const results = await Promise.all(
-                    batches.map((batch, i) =>
-                        processWithAI(batch, lifeTags, interests)
-                            .then(r => { console.log(`[AI] Batch ${i + 1}: sent ${batch.length}, got ${r.length}`); return r; })
-                            .catch(e => { console.error(`[AI] Batch ${i + 1} failed:`, e.message); return []; })
-                    )
-                );
-                const aiItems = results.flat();
+                // Process AI batches SEQUENTIALLY to respect rate limits
+                const aiItems = [];
+                for (let i = 0; i < batches.length; i++) {
+                    try {
+                        const r = await processWithAI(batches[i], lifeTags, interests);
+                        console.log(`[AI] Batch ${i + 1}: sent ${batches[i].length}, got ${r.length}`);
+                        aiItems.push(...r);
+                    } catch (e) {
+                        console.error(`[AI] Batch ${i + 1} failed:`, e.message);
+                    }
+                    // Small delay between batches to avoid rate limiting
+                    if (i < batches.length - 1) await delay(1000);
+                }
 
                 // Cache each AI result with correct courtType (await to avoid race condition)
                 await Promise.all(aiItems.map(item => {
@@ -489,11 +502,20 @@ export async function POST(request) {
         if (missingIds.length > 0) {
             console.log(`[Recovery] ${missingIds.length} items missing from cache, re-fetching...`);
             try {
-                // Use stored metadata from court cache (no CourtListener call needed)
+                // Re-read court caches to get fresh metadata (old refs may be stale after refresh)
+                const [freshScotus, freshAppeals, freshDistrict] = await Promise.all([
+                    getCourtCache('scotus'),
+                    getCourtCache('federal_appeals'),
+                    getCourtCache('district'),
+                ]);
                 const allMetadata = {
                     ...scotusCache.metadata,
                     ...appealsCache.metadata,
                     ...districtCache.metadata,
+                    // Fresh metadata overwrites stale entries
+                    ...freshScotus.metadata,
+                    ...freshAppeals.metadata,
+                    ...freshDistrict.metadata,
                 };
 
                 // Build shaped items from stored metadata
@@ -505,6 +527,7 @@ export async function POST(request) {
                         court: allMetadata[id].court || '',
                         courtType: allMetadata[id].courtType || 'district',
                         date: allMetadata[id].date || '',
+                        url: allMetadata[id].url || '',
                         downloadUrl: allMetadata[id].downloadUrl || '',
                         opinionId: allMetadata[id].opinionId || null,
                         level: 'Federal',
@@ -515,7 +538,8 @@ export async function POST(request) {
                     const courtTypeMap = {};
                     missingItems.forEach(item => { courtTypeMap[item.id] = item.courtType; });
 
-                    const recovered = await processWithAI(missingItems, lifeTags, interests)
+                    const enrichedMissing = await enrichWithOpinionText(missingItems);
+                    const recovered = await processWithAI(enrichedMissing, lifeTags, interests)
                         .catch(e => { console.error('[Recovery] AI failed:', e.message); return []; });
 
                     // Cache and add to results

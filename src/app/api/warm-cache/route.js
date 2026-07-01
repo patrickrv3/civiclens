@@ -60,15 +60,45 @@ export async function GET(request) {
 
     let billsWarmed = 0;
     let eosWarmed = 0;
+    let rulingsWarmed = 0;
     const errors = [];
+    let billsError = false;
+    let eosError = false;
+    let rulingsError = false;
 
-    // ── 1. Warm 50 bills (5 pages × 10) ────────────────────────────────────
+    const fromDateTime = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    // ── 1. Warm court rulings (most time-sensitive, runs first) ─────────────
+    try {
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.VERCEL_URL
+            ? `https://${process.env.VERCEL_URL}`
+            : 'http://localhost:3000';
+        const rulingsRes = await fetch(`${baseUrl}/api/court-rulings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lifeTags: [], interests: [], forceRefresh: true }),
+            signal: AbortSignal.timeout(55000), // Allow up to 55s (within our 60s maxDuration)
+        });
+        if (rulingsRes.ok) {
+            const rulingsData = await rulingsRes.json();
+            rulingsWarmed = (rulingsData.items || []).length;
+        } else {
+            errors.push(`Court rulings API returned ${rulingsRes.status}`);
+            rulingsError = true;
+        }
+    } catch (err) {
+        errors.push(`Court rulings warm failed: ${err.message}`);
+        rulingsError = true;
+    }
+
+    // ── 2. Warm 50 bills (5 pages × 10) ────────────────────────────────────
+    let billPageErrors = 0;
     for (let page = 0; page < 5; page++) {
         const offset = page * 10;
         try {
-            const url = `https://api.congress.gov/v3/bill?api_key=${process.env.CONGRESS_API_KEY}&limit=10&offset=${offset}&format=json`;
-            const res = await fetch(url);
-            if (!res.ok) { errors.push(`Congress API error at offset ${offset}: ${res.status}`); continue; }
+            const url = `https://api.congress.gov/v3/bill?api_key=${process.env.CONGRESS_API_KEY}&limit=10&offset=${offset}&fromDateTime=${fromDateTime}T00:00:00Z&format=json`;
+            const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+            if (!res.ok) { errors.push(`Congress API error at offset ${offset}: ${res.status}`); billPageErrors++; continue; }
             const data = await res.json();
             const bills = (data.bills || []).sort((a, b) => new Date(b.updateDate) - new Date(a.updateDate));
 
@@ -97,7 +127,7 @@ export async function GET(request) {
                         { role: 'user', content: `Summarize these bills:\n${JSON.stringify(uncached, null, 2)}` },
                     ],
                     response_format: { type: 'json_object' },
-                });
+                }, { signal: AbortSignal.timeout(45000) });
                 const parsed = JSON.parse(completion.choices[0].message.content);
                 const aiItems = parsed.bills || [];
                 await Promise.all(aiItems.map(item => item.id ? saveToCache(item) : Promise.resolve()));
@@ -105,15 +135,17 @@ export async function GET(request) {
             }
         } catch (err) {
             errors.push(`Bills page ${page} failed: ${err.message}`);
+            billPageErrors++;
         }
     }
+    if (billPageErrors === 5) billsError = true;
 
-    // ── 2. Warm 10 executive orders ─────────────────────────────────────────
+    // ── 3. Warm 10 executive orders ─────────────────────────────────────────
     try {
         const frUrl = 'https://www.federalregister.gov/api/v1/documents.json' +
             '?conditions[type][]=PRESDOCU&conditions[presidential_document_type][]=executive_order' +
             '&per_page=10&order=newest&fields[]=document_number,title,abstract,signing_date,html_url,executive_order_number';
-        const frRes = await fetch(frUrl);
+        const frRes = await fetch(frUrl, { signal: AbortSignal.timeout(12000) });
         if (frRes.ok) {
             const frData = await frRes.json();
             const orders = (frData.results || []).map(o => ({
@@ -135,46 +167,29 @@ export async function GET(request) {
                         { role: 'user', content: `Summarize these executive orders:\n${JSON.stringify(uncached, null, 2)}` },
                     ],
                     response_format: { type: 'json_object' },
-                });
+                }, { signal: AbortSignal.timeout(45000) });
                 const parsed = JSON.parse(completion.choices[0].message.content);
                 const aiItems = parsed.orders || [];
                 await Promise.all(aiItems.map(item => item.id ? saveToCache(item) : Promise.resolve()));
                 eosWarmed += aiItems.length;
             }
+        } else {
+            errors.push(`Federal Register API returned ${frRes.status}`);
+            eosError = true;
         }
     } catch (err) {
         errors.push(`Executive orders failed: ${err.message}`);
+        eosError = true;
     }
 
-    // ── 3. Warm court rulings (trigger the court-rulings API refresh) ────────
-    let rulingsWarmed = 0;
-    try {
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.VERCEL_URL
-            ? `https://${process.env.VERCEL_URL}`
-            : 'http://localhost:3000';
-        const rulingsRes = await fetch(`${baseUrl}/api/court-rulings`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lifeTags: [], interests: [], forceRefresh: true }),
-            signal: AbortSignal.timeout(55000), // Allow up to 55s (within our 60s maxDuration)
-        });
-        if (rulingsRes.ok) {
-            const rulingsData = await rulingsRes.json();
-            rulingsWarmed = (rulingsData.items || []).length;
-        } else {
-            errors.push(`Court rulings API returned ${rulingsRes.status}`);
-        }
-    } catch (err) {
-        errors.push(`Court rulings warm failed: ${err.message}`);
-    }
-
+    const allFailed = billsError && eosError && rulingsError;
     console.log(`Cache warm complete: ${billsWarmed} bills, ${eosWarmed} EOs, ${rulingsWarmed} rulings warmed. Errors: ${errors.length}`);
     return NextResponse.json({
-        success: true,
+        success: !allFailed,
         billsWarmed,
         eosWarmed,
         rulingsWarmed,
         errors,
         timestamp: new Date().toISOString(),
-    });
+    }, allFailed ? { status: 500 } : {});
 }

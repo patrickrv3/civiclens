@@ -217,28 +217,30 @@ export async function POST(request) {
                 .filter(r => r.status === 'fulfilled')
                 .flatMap(r => r.value);
 
-            // 5. Save new summaries to Firestore cache (fire-and-forget)
-            aiItems.forEach(item => {
-                if (item.id) {
-                    cacheSummary(item.id, {
-                        id: item.id,
-                        shortTitle: item.shortTitle,
-                        originalTitle: item.originalTitle,
-                        generalSummary: item.generalSummary,
-                        impactLevel: item.impactLevel,
-                        status: item.status,
-                        latestAction: item.latestAction,
-                        type: item.type || 'Bill',
-                        level: item.level || 'Federal',
-                        date: item.date || '',
-                        sponsors: item.sponsors || [],
-                        locationMatches: item.locationMatches || [],
-                        likes: 0,
-                        dislikes: 0,
-                        // Note: tagImpacts are user-specific, not cached
-                    });
-                }
-            });
+            // 5. Save new summaries to Firestore cache (awaited to prevent data loss in serverless)
+            await Promise.all(
+                aiItems
+                    .filter(item => item.id)
+                    .map(item =>
+                        cacheSummary(item.id, {
+                            id: item.id,
+                            shortTitle: item.shortTitle,
+                            originalTitle: item.originalTitle,
+                            generalSummary: item.generalSummary,
+                            impactLevel: item.impactLevel,
+                            status: item.status,
+                            latestAction: item.latestAction,
+                            type: item.type || 'Bill',
+                            level: item.level || 'Federal',
+                            date: item.date || '',
+                            sponsors: item.sponsors || [],
+                            locationMatches: item.locationMatches || [],
+                            likes: 0,
+                            dislikes: 0,
+                            // Note: tagImpacts are user-specific, not cached
+                        })
+                    )
+            );
           } catch (aiError) {
             console.error('OpenAI processing failed:', aiError.message);
             // If we have cached items, serve those — partial data is better than no data
