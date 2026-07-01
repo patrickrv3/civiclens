@@ -98,20 +98,33 @@ const COURT_CACHE_KEYS = {
 async function getCourtCache(courtType) {
     try {
         const key = COURT_CACHE_KEYS[courtType];
-        if (!key) return { ids: [], fetchedAt: 0 };
+        if (!key) return { ids: [], metadata: {}, fetchedAt: 0 };
         const snap = await getDoc(doc(db, 'billSummaries', key));
-        if (!snap.exists()) return { ids: [], fetchedAt: 0 };
+        if (!snap.exists()) return { ids: [], metadata: {}, fetchedAt: 0 };
         const data = snap.data();
-        return { ids: data.ids || [], fetchedAt: data.fetchedAt || 0 };
-    } catch { return { ids: [], fetchedAt: 0 }; }
+        return { ids: data.ids || [], metadata: data.metadata || {}, fetchedAt: data.fetchedAt || 0 };
+    } catch { return { ids: [], metadata: {}, fetchedAt: 0 }; }
 }
 
-async function saveCourtCache(courtType, ids) {
+async function saveCourtCache(courtType, ids, shapedItems) {
     try {
         const key = COURT_CACHE_KEYS[courtType];
         if (!key) return;
+        // Store metadata for each item so recovery can fetch PDFs without CourtListener
+        const metadata = {};
+        (shapedItems || []).forEach(item => {
+            metadata[item.id] = {
+                downloadUrl: item.downloadUrl || '',
+                opinionId: item.opinionId || null,
+                date: item.date || '',
+                caseName: item.caseName || '',
+                court: item.court || '',
+                courtType: item.courtType || '',
+            };
+        });
         await setDoc(doc(db, 'billSummaries', key), {
             ids: ids.slice(0, MAX_PER_COURT),
+            metadata,
             fetchedAt: Date.now(),
         });
     } catch (e) { console.warn(`Court cache save failed (${courtType}):`, e.message); }
@@ -425,11 +438,11 @@ export async function POST(request) {
                 }));
             }
 
-            // Step 5: Save updated per-court caches
+            // Step 5: Save updated per-court caches (with metadata for recovery)
             await Promise.all([
-                saveCourtCache('scotus', scotusMerge.mergedIds),
-                saveCourtCache('federal_appeals', appealsMerge.mergedIds),
-                saveCourtCache('district', districtMerge.mergedIds),
+                saveCourtCache('scotus', scotusMerge.mergedIds, latest.scotus),
+                saveCourtCache('federal_appeals', appealsMerge.mergedIds, latest.appeals),
+                saveCourtCache('district', districtMerge.mergedIds, latest.district),
             ]);
         } else {
             console.log('[Cache] All courts fresh, serving from cache');
@@ -477,14 +490,29 @@ export async function POST(request) {
         if (missingIds.length > 0) {
             console.log(`[Recovery] ${missingIds.length} items missing from cache, re-fetching...`);
             try {
-                // Fetch fresh from CourtListener to get the shaped data for these items
-                const latest = await fetchLatest();
-                const allLatest = [...latest.scotus, ...latest.appeals, ...latest.district];
-                const missingSet = new Set(missingIds);
-                const missingItems = allLatest.filter(item => missingSet.has(item.id));
+                // Use stored metadata from court cache (no CourtListener call needed)
+                const allMetadata = {
+                    ...scotusCache.metadata,
+                    ...appealsCache.metadata,
+                    ...districtCache.metadata,
+                };
+
+                // Build shaped items from stored metadata
+                const missingItems = missingIds
+                    .filter(id => allMetadata[id])
+                    .map(id => ({
+                        id,
+                        caseName: allMetadata[id].caseName || '',
+                        court: allMetadata[id].court || '',
+                        courtType: allMetadata[id].courtType || 'district',
+                        date: allMetadata[id].date || '',
+                        downloadUrl: allMetadata[id].downloadUrl || '',
+                        opinionId: allMetadata[id].opinionId || null,
+                        level: 'Federal',
+                    }));
 
                 if (missingItems.length > 0) {
-                    console.log(`[Recovery] Found ${missingItems.length} items to re-process`);
+                    console.log(`[Recovery] Found ${missingItems.length} items with stored metadata (no CourtListener needed)`);
                     const courtTypeMap = {};
                     missingItems.forEach(item => { courtTypeMap[item.id] = item.courtType; });
 
@@ -511,6 +539,8 @@ export async function POST(request) {
                         }
                     });
                     console.log(`[Recovery] Recovered ${recovered.length} items`);
+                } else {
+                    console.log(`[Recovery] No metadata found for missing items — will recover on next full refresh`);
                 }
             } catch (err) {
                 console.error('[Recovery] Failed:', err.message);
