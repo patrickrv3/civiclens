@@ -294,14 +294,13 @@ async function fetchOpinionText(opinionId, downloadUrl) {
             const res = await fetch(downloadUrl, { signal: controller.signal });
             clearTimeout(timeout);
             if (res.ok) {
-                const buffer = Buffer.from(await res.arrayBuffer());
-                const pdfModule = await import('pdf-parse');
-                const pdfParse = pdfModule.default || pdfModule;
-                const parsed = await pdfParse(buffer, { max: 5 }); // Parse first 5 pages
-                const text = (parsed.text || '').replace(/\s+/g, ' ').trim();
-                if (text.length > 200) {
-                    console.log(`[PDF] Extracted ${text.length} chars from ${downloadUrl}`);
-                    return text.substring(0, 4000); // More text for better AI analysis
+                const arrayBuf = await res.arrayBuffer();
+                const { extractText } = await import('unpdf');
+                const { text } = await extractText(new Uint8Array(arrayBuf), { mergePages: true });
+                const cleaned = (text || '').replace(/\s+/g, ' ').trim();
+                if (cleaned.length > 200) {
+                    console.log(`[PDF] Extracted ${cleaned.length} chars from ${downloadUrl}`);
+                    return cleaned.substring(0, 4000);
                 }
             }
         } catch (err) {
