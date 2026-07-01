@@ -207,13 +207,15 @@ export async function POST(request) {
                         { role: "user", content: userPrompt }
                     ],
                     response_format: { type: "json_object" },
-                }, { signal: AbortSignal.timeout(25000) });
+                }, { signal: AbortSignal.timeout(45000) });
                 const aiResponse = JSON.parse(completion.choices[0].message.content);
                 return aiResponse.bills || [];
             });
 
-            const chunkResults = await Promise.all(chunkPromises);
-            aiItems = chunkResults.flat();
+            const chunkResults = await Promise.allSettled(chunkPromises);
+            aiItems = chunkResults
+                .filter(r => r.status === 'fulfilled')
+                .flatMap(r => r.value);
 
             // 5. Save new summaries to Firestore cache (fire-and-forget)
             aiItems.forEach(item => {
