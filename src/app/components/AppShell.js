@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, createContext, useContext } from 'react';
+import { useState, useEffect, useRef, createContext, useContext } from 'react';
 import styles from '../layout.module.css';
 import { useProfile } from '../context/ProfileContext';
 import OnboardingModal from './OnboardingModal';
@@ -124,6 +124,14 @@ export default function AppShell({ children }) {
     const [showNotifPanel, setShowNotifPanel] = useState(false);
     const [askAIQuestion, setAskAIQuestion] = useState(null);
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+    const contentRef = useRef(null);
+
+    // Reset scroll position when switching pages
+    useEffect(() => {
+        if (contentRef.current) {
+            contentRef.current.scrollTop = 0;
+        }
+    }, [activePage]);
 
     const handleNavClick = (id) => {
         // Gate State & Local behind Pro subscription (web only — iOS has no IAP yet)
@@ -325,7 +333,7 @@ export default function AppShell({ children }) {
                     </header>
 
                     {/* Content */}
-                    <div className={styles.content}>
+                    <div className={styles.content} ref={contentRef}>
                         <div className={styles.contentInner}>
                             {activePage === 'assistant' ? (
                                 <AIAssistant initialQuestion={askAIQuestion} onQuestionConsumed={() => setAskAIQuestion(null)} />
