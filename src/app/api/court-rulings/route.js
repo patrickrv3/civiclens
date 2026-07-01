@@ -38,27 +38,34 @@ const COURT_NAME_MAP = {
 };
 
 const SYSTEM_PROMPT = `You are an expert, neutral, nonpartisan civic analyst specializing in court rulings.
-Your job is to read court opinion data and output a JSON array.
+Your job is to read court opinion data — including the ACTUAL OPINION TEXT when provided — and output a JSON array.
+
+CRITICAL RULES:
+1. You MUST read and use the "opinionText" field if provided. This is the actual court opinion. Base your summary on this text.
+2. Your generalSummary MUST state the SPECIFIC ruling outcome: what did the court decide? Include the vote split if mentioned (e.g., "in a 6-3 decision").
+3. NEVER fabricate or guess. If the opinion text does not clearly state the outcome, say what you can determine and note the limitation.
+4. Use the EXACT date, court, courtType, url, and id provided. Do NOT modify these fields.
+
 For each ruling, provide:
-- id: The exact ID provided.
+- id: The EXACT ID provided. Do not change it.
 - shortTitle: A very short, punchy plain-English title (max 6-8 words).
 - originalTitle: The exact case name provided.
-- generalSummary: A plain-English summary that MUST state what the court actually ruled or decided. The first sentence should clearly state the outcome (e.g., "The court ruled that...", "The judge blocked...", "The court upheld...", "The appeals court reversed..."). The second sentence should explain the real-world impact or what it means. Do NOT just describe what the case is about — tell the reader what happened. Maximum 2 sentences.
+- generalSummary: A plain-English summary based on the opinion text. The first sentence MUST state the specific outcome (e.g., "The Supreme Court ruled 6-3 that birthright citizenship is protected under the 14th Amendment, striking down the executive order."). The second sentence should explain the real-world impact. Maximum 2 sentences.
 - impactLevel: One of "High Impact", "Moderate Impact", or "Low Impact".
 - profileLevel: One of "High Profile", "Notable", or "Routine" based on these criteria:
   * "High Profile": Constitutional rights (1st, 2nd, 4th, 14th Amendment), immigration/asylum/deportation, executive power/separation of powers, abortion/reproductive rights, voting rights, gun control, LGBTQ+ rights, cases involving government agencies, cases overturning precedent, cases widely covered in media, district court rulings blocking government policy.
   * "Notable": Significant legal precedent but not front-page news.
   * "Routine": Standard legal proceedings, routine patent disputes, procedural matters.
 - topics: An array of relevant topic strings from this list: "Immigration", "First Amendment", "Executive Power", "Civil Rights", "Voting Rights", "Criminal Justice", "Environment", "Healthcare", "Gun Rights", "Labor", "Technology", "Education". Only include genuinely relevant topics.
-- court: The human-readable court name provided.
-- courtType: The court type provided (one of "scotus", "federal_appeals", "district").
-- status: A specific ruling outcome (e.g., "Blocked", "Upheld", "Reversed", "Injunction Granted", "Affirmed", "Struck Down", "Remanded"). Be specific about what the court did.
-- latestAction: A 1-sentence description of the specific ruling action and outcome. State what the judge or court decided, not just that they "reviewed" or "considered" the case.
+- court: The human-readable court name provided. Do not change it.
+- courtType: The court type provided (one of "scotus", "federal_appeals", "district"). Do not change it.
+- status: A specific ruling outcome (e.g., "Struck Down", "Upheld", "Reversed", "Injunction Granted", "Affirmed", "Blocked", "Remanded", "Dismissed"). Be specific about what the court did.
+- latestAction: A 1-sentence description of the specific ruling action and outcome, including the vote split if known.
 - tagImpacts: A JSON object where keys are the specific Life Tags provided, and values are a 1-sentence explanation of why this ruling matters to someone with that tag. Only include tags with a genuine impact.
 - type: Always "Court Ruling".
 - level: Always "Federal".
-- url: The URL provided.
-- date: The date provided.
+- url: The EXACT URL provided. Do not change it.
+- date: The EXACT date provided. Do not change it.
 
 Return ONLY valid JSON in the format:
 { "rulings": [ { "id": "...", "shortTitle": "...", "originalTitle": "...", "generalSummary": "...", "impactLevel": "...", "profileLevel": "...", "topics": [], "court": "...", "courtType": "...", "status": "...", "latestAction": "...", "tagImpacts": {}, "type": "Court Ruling", "level": "Federal", "url": "...", "date": "...", "sponsors": [], "locationMatches": [], "likes": 0, "dislikes": 0 } ] }`;
@@ -173,6 +180,8 @@ function getCourtType(courtId) {
 
 function shapeOpinion(opinion) {
     const courtId = opinion.court_id || '';
+    // Extract the first opinion ID for fetching full text later
+    const firstOpinion = (opinion.opinions || [])[0];
     return {
         id: `court-${opinion.cluster_id || opinion.id || opinion.docket_id || Date.now()}`,
         caseName: opinion.caseName || opinion.case_name || '',
@@ -185,6 +194,8 @@ function shapeOpinion(opinion) {
         docketNumber: opinion.docketNumber || opinion.docket_number || '',
         suitNature: opinion.suitNature || opinion.suit_nature || '',
         citeCount: opinion.citeCount || opinion.citation_count || 0,
+        opinionId: firstOpinion?.id || null,
+        judge: opinion.judge || '',
     };
 }
 
@@ -207,14 +218,64 @@ function mergeCourtItems(existingIds, newShaped) {
     return { mergedIds: allIds, newItems: genuinelyNew };
 }
 
+// ── Fetch opinion text for richer AI summaries ──
+
+async function fetchOpinionText(opinionId) {
+    if (!opinionId) return '';
+    const token = process.env.COURTLISTENER_API_TOKEN;
+    if (!token) return '';
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        const res = await fetch(`https://www.courtlistener.com/api/rest/v4/opinions/${opinionId}/`, {
+            headers: { Authorization: `Token ${token}` },
+            signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        if (!res.ok) return '';
+        const data = await res.json();
+        // Get plain text or strip HTML tags from html_with_citations
+        let text = data.plain_text || '';
+        if (!text && data.html_with_citations) {
+            text = data.html_with_citations.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+        }
+        if (!text && data.html) {
+            text = data.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+        }
+        // Return first ~3000 chars (syllabus + beginning of opinion)
+        return text.substring(0, 3000).trim();
+    } catch (err) {
+        console.warn(`[CL] Opinion text fetch failed for ${opinionId}:`, err.message);
+        return '';
+    }
+}
+
+async function enrichWithOpinionText(items) {
+    // Fetch opinion text for all items in parallel
+    const enriched = await Promise.allSettled(
+        items.map(async (item) => {
+            const opinionText = await fetchOpinionText(item.opinionId);
+            return { ...item, opinionText: opinionText || '(No opinion text available — summarize based on case name and context)' };
+        })
+    );
+    return enriched
+        .filter(r => r.status === 'fulfilled')
+        .map(r => r.value);
+}
+
 // ── AI processing helper ──
 
 async function processWithAI(opinions, lifeTags, interests) {
     if (opinions.length === 0) return [];
+
+    // Enrich with opinion text before sending to AI
+    const enrichedOpinions = await enrichWithOpinionText(opinions);
+    console.log(`[AI] Enriched ${enrichedOpinions.filter(o => o.opinionText && !o.opinionText.startsWith('(')).length}/${enrichedOpinions.length} items with opinion text`);
+
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || '' });
-    const userPrompt = `Analyze these court rulings and generate tagImpacts for Life Tags: ${(lifeTags || []).join(', ') || 'None'}.${
+    const userPrompt = `Analyze these court rulings using the provided opinionText. Generate tagImpacts for Life Tags: ${(lifeTags || []).join(', ') || 'None'}.${
         interests?.length ? `\n\nThe user is interested in: ${interests.join(', ')}.` : ''
-    }\n\nRulings:\n${JSON.stringify(opinions, null, 2)}`;
+    }\n\nRulings:\n${JSON.stringify(enrichedOpinions, null, 2)}`;
 
     const completion = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
@@ -223,10 +284,17 @@ async function processWithAI(opinions, lifeTags, interests) {
             { role: 'user', content: userPrompt },
         ],
         response_format: { type: 'json_object' },
-    });
+    }, { signal: AbortSignal.timeout(50000) });
 
     const parsed = JSON.parse(completion.choices[0].message.content);
-    return parsed.rulings || [];
+    const aiResults = parsed.rulings || [];
+
+    // Enforce original dates from CourtListener (AI sometimes changes them)
+    const dateMap = new Map(enrichedOpinions.map(o => [o.id, o.date]));
+    return aiResults.map(item => ({
+        ...item,
+        date: dateMap.get(item.id) || item.date,
+    }));
 }
 
 // ── Main handler ──
