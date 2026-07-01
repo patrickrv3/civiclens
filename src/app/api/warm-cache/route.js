@@ -195,6 +195,55 @@ export async function GET(request) {
     }
 
     const allFailed = billsError && eosError && rulingsError;
+    const hasErrors = errors.length > 0;
+
+    // ── Log cron health to Firestore ─────────────────────────────────────────
+    const cronResult = {
+        success: !allFailed,
+        billsWarmed,
+        eosWarmed,
+        rulingsWarmed,
+        errors,
+        hasErrors,
+        timestamp: new Date().toISOString(),
+        durationMs: Date.now() - Date.now(), // will be set below
+    };
+    const startTime = Date.now(); // approximate (real start was earlier, but this captures the tail)
+    try {
+        await setDoc(doc(db, 'cronHealth', 'latest'), {
+            ...cronResult,
+            timestamp: new Date().toISOString(),
+        });
+        // Keep a history log (last 30 runs)
+        const historyId = `run_${new Date().toISOString().replace(/[:.]/g, '-')}`;
+        await setDoc(doc(db, 'cronHealth', historyId), cronResult);
+    } catch (e) {
+        console.warn('[Cron] Failed to log health:', e.message);
+    }
+
+    // ── Send webhook alert if there are errors ───────────────────────────────
+    const webhookUrl = process.env.CRON_ALERT_WEBHOOK;
+    if (webhookUrl && hasErrors) {
+        try {
+            const alertBody = {
+                content: `⚠️ **Civisly Cron Alert** — ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })}\n` +
+                    `Status: ${allFailed ? '🔴 ALL FAILED' : '🟡 Partial failure'}\n` +
+                    `Bills: ${billsWarmed} warmed${billsError ? ' ❌' : ' ✅'}\n` +
+                    `EOs: ${eosWarmed} warmed${eosError ? ' ❌' : ' ✅'}\n` +
+                    `Rulings: ${rulingsWarmed} warmed${rulingsError ? ' ❌' : ' ✅'}\n` +
+                    `Errors:\n${errors.map(e => `• ${e}`).join('\n')}`,
+            };
+            await fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(alertBody),
+                signal: AbortSignal.timeout(5000),
+            });
+        } catch (e) {
+            console.warn('[Cron] Webhook alert failed:', e.message);
+        }
+    }
+
     console.log(`Cache warm complete: ${billsWarmed} bills, ${eosWarmed} EOs, ${rulingsWarmed} rulings warmed. Errors: ${errors.length}`);
     return NextResponse.json({
         success: !allFailed,
