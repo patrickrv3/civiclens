@@ -557,7 +557,7 @@
     }
 
     .content {
-        padding: var(--cl-space-4);
+        padding: 14px;
     }
 
     .statsRow {
