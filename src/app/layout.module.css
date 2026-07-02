@@ -362,7 +362,7 @@
 .content {
     flex: 1;
     overflow-y: auto;
-    padding: var(--cl-space-8);
+    padding: var(--cl-space-6);
 }
 
 .contentInner {
@@ -557,7 +557,7 @@
     }
 
     .content {
-        padding: var(--cl-space-5);
+        padding: var(--cl-space-4);
     }
 
     .statsRow {
