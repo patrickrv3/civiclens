@@ -91,22 +91,34 @@ export async function GET(request) {
         rulingsError = true;
     }
 
-    // ── 2. Warm top 50 Senate bills by latest action date ─────────────────
+    // ── 2. Warm Senate bills with meaningful action ────────────────────────
     let billPageErrors = 0;
     try {
         const fromDate = new Date();
-        fromDate.setDate(fromDate.getDate() - 30);
+        fromDate.setDate(fromDate.getDate() - 120);
         const fromDateTime = fromDate.toISOString().split('.')[0] + 'Z';
-        const url = `https://api.congress.gov/v3/bill/119/s?api_key=${process.env.CONGRESS_API_KEY}&limit=50&fromDateTime=${fromDateTime}&sort=updateDate&sort_direction=desc&format=json`;
+        const url = `https://api.congress.gov/v3/bill/119/s?api_key=${process.env.CONGRESS_API_KEY}&limit=100&fromDateTime=${fromDateTime}&sort=updateDate&sort_direction=desc&format=json`;
         const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
         if (!res.ok) {
             errors.push(`Congress API error: ${res.status}`);
             billPageErrors = 5;
         } else {
             const data = await res.json();
-            // Sort by actual latest action date and filter placeholders
+            // Filter: only bills with meaningful legislative action
+            const introPatterns = [
+                'read twice and referred',
+                'introduced in',
+                'referred to the committee',
+                'referred to the subcommittee',
+                'sponsor introductory remarks',
+                'reserved for',
+            ];
             const allBills = (data.bills || [])
-                .filter(b => !(b.title || '').toLowerCase().includes('reserved for'))
+                .filter(b => {
+                    if ((b.title || '').toLowerCase().includes('reserved for')) return false;
+                    const action = (b.latestAction?.text || '').toLowerCase();
+                    return !introPatterns.some(p => action.includes(p));
+                })
                 .sort((a, b) => {
                     const dateA = new Date(a.latestAction?.actionDate || '2000-01-01');
                     const dateB = new Date(b.latestAction?.actionDate || '2000-01-01');

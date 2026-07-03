@@ -135,13 +135,11 @@ export async function POST(request) {
         }
 
         // 2. Fetch Senate bills from the 119th Congress (2025-2027)
-        // Senate bills have the most recent legislative activity and represent
-        // legislation with a real shot at becoming law. House bills that progress
-        // will eventually appear here when they reach the Senate.
-        // Use fromDateTime (30 days) to get only recently-active bills.
-        const fetchSize = 50;
+        // Only include bills with meaningful action (beyond just introduced/referred).
+        // Use a larger fetch + wider window to compensate for filtering.
+        const fetchSize = 100;
         const fromDate = new Date();
-        fromDate.setDate(fromDate.getDate() - 30);
+        fromDate.setDate(fromDate.getDate() - 120);
         const fromDateTime = fromDate.toISOString().split('.')[0] + 'Z';
         const congressUrl = "https://api.congress.gov/v3/bill/119/s?api_key=" + process.env.CONGRESS_API_KEY +
             "&limit=" + fetchSize +
@@ -162,11 +160,24 @@ export async function POST(request) {
         }
 
         const data = await congressRes.json();
-        // Re-sort by actual latest action date (most recent first), filter out placeholders
+
+        // Filter: only bills with meaningful legislative action.
+        // Exclude bills whose latest action is just introduction or referral.
+        const introPatterns = [
+            'read twice and referred',
+            'introduced in',
+            'referred to the committee',
+            'referred to the subcommittee',
+            'sponsor introductory remarks',
+            'reserved for',
+        ];
         const bills = (data.bills || [])
             .filter(b => {
                 const title = (b.title || '').toLowerCase();
-                return !title.includes('reserved for');
+                if (title.includes('reserved for')) return false;
+                const action = (b.latestAction?.text || '').toLowerCase();
+                // Keep the bill if its latest action is NOT just an introduction/referral
+                return !introPatterns.some(p => action.startsWith(p) || action.includes(p));
             })
             .sort((a, b) => {
                 const dateA = new Date(a.latestAction?.actionDate || '2000-01-01');
