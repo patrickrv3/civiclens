@@ -139,8 +139,8 @@ export async function POST(request) {
         // behind thousands of low-numbered intro-only bills.
         // If not enough results, widen to 90 days.
         const fetchSize = 250;
-        let fromDays = 14;
         let bills = [];
+        let lastData = null;
 
         for (const window of [14, 60, 120]) {
             const fromDate = new Date();
@@ -162,6 +162,7 @@ export async function POST(request) {
             }
 
             const data = await congressRes.json();
+            lastData = data;
 
             // Filter: only bills with meaningful legislative action.
             const introPatterns = [
@@ -360,7 +361,7 @@ export async function POST(request) {
             });
         }
 
-        const pagination = data.pagination || {};
+        const pagination = (lastData && lastData.pagination) || {};
         const hasMore = !!pagination.next;
 
         console.log(`Feed [${sortMode}]: ${cachedItems.length} cached, ${aiItems.length} from AI, hasMore=${hasMore}`);
