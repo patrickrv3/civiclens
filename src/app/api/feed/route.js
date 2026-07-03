@@ -148,13 +148,12 @@ export async function POST(request) {
             'reserved for',
         ];
 
-        const fromDate = new Date();
-        fromDate.setDate(fromDate.getDate() - 30);
-        const fromDateTime = fromDate.toISOString().split('.')[0] + 'Z';
-
-        // Fetch from multiple bill types in parallel
-        const billTypes = ['s', 'hr', 'hres', 'sjres', 'hjres', 'sres'];
-        const pagesPerType = { s: 3, hr: 3, hres: 1, sjres: 1, hjres: 1, sres: 1 };
+        // Fetch from multiple bill types in parallel — no fromDateTime
+        // because it filters by metadata updateDate, NOT action date.
+        // Bills with recent floor action (like S.629, "Presented to President"
+        // June 30) may have old updateDates and would be excluded.
+        const billTypes = ['s', 'hr', 'hjres', 'sjres'];
+        const pagesPerType = { s: 3, hr: 3, hjres: 1, sjres: 1 };
         let allRawBills = [];
 
         const fetchPromises = [];
@@ -165,9 +164,6 @@ export async function POST(request) {
                 const url = "https://api.congress.gov/v3/bill/119/" + billType + "?api_key=" + process.env.CONGRESS_API_KEY +
                     "&limit=" + fetchSize +
                     "&offset=" + offset +
-                    "&fromDateTime=" + fromDateTime +
-                    "&sort=updateDate" +
-                    "&sort_direction=desc" +
                     "&format=json";
                 fetchPromises.push(
                     fetchWithRetry(url)
