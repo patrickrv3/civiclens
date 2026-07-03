@@ -134,14 +134,15 @@ export async function POST(request) {
             );
         }
 
-        // 2. Fetch Senate bills from the 119th Congress (2025-2027)
-        // Only include bills with meaningful action (beyond just introduced/referred).
-        // Use a larger fetch + wider window to compensate for filtering.
-        const fetchSize = 100;
+        // 2. Fetch all bills from the 119th Congress with meaningful action.
+        // Includes Senate bills, House bills that passed the House, joint
+        // resolutions, and anything that's become law. The intro-only filter
+        // below removes the noise (just introduced/referred bills).
+        const fetchSize = 250;
         const fromDate = new Date();
         fromDate.setDate(fromDate.getDate() - 120);
         const fromDateTime = fromDate.toISOString().split('.')[0] + 'Z';
-        const congressUrl = "https://api.congress.gov/v3/bill/119/s?api_key=" + process.env.CONGRESS_API_KEY +
+        const congressUrl = "https://api.congress.gov/v3/bill/119?api_key=" + process.env.CONGRESS_API_KEY +
             "&limit=" + fetchSize +
             "&offset=" + pageOffset +
             "&fromDateTime=" + fromDateTime +
