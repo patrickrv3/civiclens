@@ -135,56 +135,67 @@ export async function POST(request) {
         }
 
         // 2. Fetch all bills from the 119th Congress with meaningful action.
-        // Includes Senate bills, House bills that passed the House, joint
-        // resolutions, and anything that's become law. The intro-only filter
-        // below removes the noise (just introduced/referred bills).
+        // Use a short window (14 days) so recently-passed bills aren't buried
+        // behind thousands of low-numbered intro-only bills.
+        // If not enough results, widen to 90 days.
         const fetchSize = 250;
-        const fromDate = new Date();
-        fromDate.setDate(fromDate.getDate() - 120);
-        const fromDateTime = fromDate.toISOString().split('.')[0] + 'Z';
-        const congressUrl = "https://api.congress.gov/v3/bill/119?api_key=" + process.env.CONGRESS_API_KEY +
-            "&limit=" + fetchSize +
-            "&offset=" + pageOffset +
-            "&fromDateTime=" + fromDateTime +
-            "&sort=updateDate" +
-            "&sort_direction=desc" +
-            "&format=json";
-        const congressRes = await fetchWithRetry(congressUrl);
+        let fromDays = 14;
+        let bills = [];
 
-        if (!congressRes.ok) {
-            const errorText = await congressRes.text().catch(() => 'Unknown error');
-            console.error(`Congress API Error: ${congressRes.status} - ${errorText}`);
+        for (const window of [14, 60, 120]) {
+            const fromDate = new Date();
+            fromDate.setDate(fromDate.getDate() - window);
+            const fromDateTime = fromDate.toISOString().split('.')[0] + 'Z';
+            const congressUrl = "https://api.congress.gov/v3/bill/119?api_key=" + process.env.CONGRESS_API_KEY +
+                "&limit=" + fetchSize +
+                "&offset=" + pageOffset +
+                "&fromDateTime=" + fromDateTime +
+                "&sort=updateDate" +
+                "&sort_direction=desc" +
+                "&format=json";
+            const congressRes = await fetchWithRetry(congressUrl);
+
+            if (!congressRes.ok) {
+                const errorText = await congressRes.text().catch(() => 'Unknown error');
+                console.error(`Congress API Error (${window}d window): ${congressRes.status} - ${errorText}`);
+                continue; // try wider window
+            }
+
+            const data = await congressRes.json();
+
+            // Filter: only bills with meaningful legislative action.
+            const introPatterns = [
+                'read twice and referred',
+                'introduced in',
+                'referred to',
+                'sponsor introductory remarks',
+                'reserved for',
+            ];
+            bills = (data.bills || [])
+                .filter(b => {
+                    const title = (b.title || '').toLowerCase();
+                    if (title.includes('reserved for')) return false;
+                    const action = (b.latestAction?.text || '').toLowerCase();
+                    return !introPatterns.some(p => action.includes(p));
+                })
+                .sort((a, b) => {
+                    const dateA = new Date(a.latestAction?.actionDate || '2000-01-01');
+                    const dateB = new Date(b.latestAction?.actionDate || '2000-01-01');
+                    return dateB - dateA;
+                })
+                .slice(0, 12);
+
+            console.log(`Feed: ${window}d window → ${(data.bills || []).length} raw, ${bills.length} after action filter`);
+            if (bills.length >= 6) break; // enough meaningful bills found
+        }
+
+        // If all windows failed, return error
+        if (bills.length === 0) {
             return NextResponse.json(
-                { error: `Congress API temporarily unavailable. Please try again.`, items: [], hasMore: false },
+                { error: 'No legislation with meaningful action found. Please try again.', items: [], hasMore: false },
                 { status: 502 }
             );
         }
-
-        const data = await congressRes.json();
-
-        // Filter: only bills with meaningful legislative action.
-        // Exclude bills whose latest action is just introduction or referral.
-        const introPatterns = [
-            'read twice and referred',
-            'introduced in',
-            'referred to',          // catches all referrals (House/Senate committee, subcommittee)
-            'sponsor introductory remarks',
-            'reserved for',
-        ];
-        const bills = (data.bills || [])
-            .filter(b => {
-                const title = (b.title || '').toLowerCase();
-                if (title.includes('reserved for')) return false;
-                const action = (b.latestAction?.text || '').toLowerCase();
-                // Keep the bill if its latest action is NOT just an introduction/referral
-                return !introPatterns.some(p => action.startsWith(p) || action.includes(p));
-            })
-            .sort((a, b) => {
-                const dateA = new Date(a.latestAction?.actionDate || '2000-01-01');
-                const dateB = new Date(b.latestAction?.actionDate || '2000-01-01');
-                return dateB - dateA; // newest first
-            })
-            .slice(0, 12);
 
         // Bills filtered to current congress only
 
