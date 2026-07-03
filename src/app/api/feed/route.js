@@ -135,13 +135,15 @@ export async function POST(request) {
         }
 
         // 2. Fetch bills from the 119th Congress (2025-2027)
-        // Fetch a large batch so we can sort by actual latest action date on our side.
-        // Congress.gov only supports sort=updateDate (internal metadata), not by
-        // actual legislative action date, so we fetch more and sort ourselves.
+        // Use sort=updateDate desc to get recently-touched bills from the API,
+        // then re-sort by actual latestAction date on our side.
+        // Without updateDate sort, the API returns by bill number (all Jan 2025).
         const fetchSize = 250;
         const congressUrl = "https://api.congress.gov/v3/bill/119?api_key=" + process.env.CONGRESS_API_KEY +
             "&limit=" + fetchSize +
             "&offset=" + pageOffset +
+            "&sort=updateDate" +
+            "&sort_direction=desc" +
             "&format=json";
         const congressRes = await fetchWithRetry(congressUrl);
 
@@ -155,7 +157,7 @@ export async function POST(request) {
         }
 
         const data = await congressRes.json();
-        // Sort by actual latest action date (most recent first), filter out placeholders
+        // Re-sort by actual latest action date (most recent first), filter out placeholders
         const bills = (data.bills || [])
             .filter(b => {
                 const title = (b.title || '').toLowerCase();

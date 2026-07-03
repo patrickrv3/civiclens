@@ -94,7 +94,7 @@ export async function GET(request) {
     // ── 2. Warm top 50 bills by latest action date ──────────────────────────
     let billPageErrors = 0;
     try {
-        const url = `https://api.congress.gov/v3/bill/119?api_key=${process.env.CONGRESS_API_KEY}&limit=250&format=json`;
+        const url = `https://api.congress.gov/v3/bill/119?api_key=${process.env.CONGRESS_API_KEY}&limit=250&sort=updateDate&sort_direction=desc&format=json`;
         const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
         if (!res.ok) { errors.push(`Congress API error: ${res.status}`); billPageErrors = 5; }
         else {
