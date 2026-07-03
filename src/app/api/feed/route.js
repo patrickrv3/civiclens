@@ -134,13 +134,14 @@ export async function POST(request) {
             );
         }
 
-        // 2. Fetch bills from the 119th Congress (2025-2027), most recently updated first
-        const fetchSize = 20;
+        // 2. Fetch bills from the 119th Congress (2025-2027)
+        // Fetch a large batch so we can sort by actual latest action date on our side.
+        // Congress.gov only supports sort=updateDate (internal metadata), not by
+        // actual legislative action date, so we fetch more and sort ourselves.
+        const fetchSize = 250;
         const congressUrl = "https://api.congress.gov/v3/bill/119?api_key=" + process.env.CONGRESS_API_KEY +
             "&limit=" + fetchSize +
             "&offset=" + pageOffset +
-            "&sort=updateDate" +
-            "&sort_direction=desc" +
             "&format=json";
         const congressRes = await fetchWithRetry(congressUrl);
 
@@ -154,11 +155,16 @@ export async function POST(request) {
         }
 
         const data = await congressRes.json();
-        // Filter out placeholder bills (e.g., "Reserved for the Speaker") and limit to 12
+        // Sort by actual latest action date (most recent first), filter out placeholders
         const bills = (data.bills || [])
             .filter(b => {
                 const title = (b.title || '').toLowerCase();
                 return !title.includes('reserved for');
+            })
+            .sort((a, b) => {
+                const dateA = new Date(a.latestAction?.actionDate || '2000-01-01');
+                const dateB = new Date(b.latestAction?.actionDate || '2000-01-01');
+                return dateB - dateA; // newest first
             })
             .slice(0, 12);
 

@@ -91,16 +91,27 @@ export async function GET(request) {
         rulingsError = true;
     }
 
-    // ── 2. Warm 50 bills (5 pages × 10) ────────────────────────────────────
+    // ── 2. Warm top 50 bills by latest action date ──────────────────────────
     let billPageErrors = 0;
-    for (let page = 0; page < 5; page++) {
-        const offset = page * 10;
-        try {
-            const url = `https://api.congress.gov/v3/bill/119?api_key=${process.env.CONGRESS_API_KEY}&limit=10&offset=${offset}&sort=updateDate&sort_direction=desc&format=json`;
-            const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
-            if (!res.ok) { errors.push(`Congress API error at offset ${offset}: ${res.status}`); billPageErrors++; continue; }
-            const data = await res.json();
-            const bills = data.bills || [];
+    try {
+        const url = `https://api.congress.gov/v3/bill/119?api_key=${process.env.CONGRESS_API_KEY}&limit=250&format=json`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
+        if (!res.ok) { errors.push(`Congress API error: ${res.status}`); billPageErrors = 5; }
+        else {
+        const data = await res.json();
+        // Sort by actual latest action date and filter placeholders
+        const allBills = (data.bills || [])
+            .filter(b => !(b.title || '').toLowerCase().includes('reserved for'))
+            .sort((a, b) => {
+                const dateA = new Date(a.latestAction?.actionDate || '2000-01-01');
+                const dateB = new Date(b.latestAction?.actionDate || '2000-01-01');
+                return dateB - dateA;
+            });
+
+        // Process in pages of 10 (up to 50 total)
+        for (let page = 0; page < 5; page++) {
+            const bills = allBills.slice(page * 10, (page + 1) * 10);
+            if (bills.length === 0) break;
 
             const forProcessing = bills.map(b => {
                 const congressNum = b.congress || 118;
@@ -158,6 +169,11 @@ export async function GET(request) {
             errors.push(`Bills page ${page} failed: ${err.message}`);
             billPageErrors++;
         }
+        }
+        }
+    } catch (err) {
+        errors.push(`Congress API fetch failed: ${err.message}`);
+        billPageErrors = 5;
     }
     if (billPageErrors === 5) billsError = true;
 
