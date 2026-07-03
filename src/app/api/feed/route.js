@@ -134,11 +134,13 @@ export async function POST(request) {
             );
         }
 
-        // 2. Fetch bills from the 119th Congress (2025-2027) sorted by latest action
+        // 2. Fetch bills from the 119th Congress (2025-2027), most recently updated first
         const fetchSize = 20;
         const congressUrl = "https://api.congress.gov/v3/bill/119?api_key=" + process.env.CONGRESS_API_KEY +
             "&limit=" + fetchSize +
             "&offset=" + pageOffset +
+            "&sort=updateDate" +
+            "&sort_direction=desc" +
             "&format=json";
         const congressRes = await fetchWithRetry(congressUrl);
 
