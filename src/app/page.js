@@ -101,9 +101,11 @@ export default function Home() {
         }
 
         const impactOrd = { 'High Impact': 0, 'Moderate Impact': 1, 'Low Impact': 2 };
-        // Merge and pre-sort by impact so filteredItems never re-sorts and causes scroll jumps
+        // Merge and sort based on the active sort mode
         const allFederal = [...(feedData.items || []), ...eoItems].sort(
-          (a, b) => (impactOrd[a.impactLevel] ?? 3) - (impactOrd[b.impactLevel] ?? 3)
+          sortBy === 'recent'
+            ? (a, b) => new Date(b.latestActionDate || b.updateDate || b.date || 0) - new Date(a.latestActionDate || a.updateDate || a.date || 0)
+            : (a, b) => (impactOrd[a.impactLevel] ?? 3) - (impactOrd[b.impactLevel] ?? 3)
         );
 
         setFeedItems(allFederal);
@@ -118,6 +120,18 @@ export default function Home() {
     fetchBaseFeed();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Runs ONCE on mount
+
+  // Re-sort items when user toggles sort mode
+  useEffect(() => {
+    if (feedItems.length === 0) return;
+    const impactOrd = { 'High Impact': 0, 'Moderate Impact': 1, 'Low Impact': 2 };
+    setFeedItems(prev => [...prev].sort(
+      sortBy === 'recent'
+        ? (a, b) => new Date(b.latestActionDate || b.updateDate || b.date || 0) - new Date(a.latestActionDate || a.updateDate || a.date || 0)
+        : (a, b) => (impactOrd[a.impactLevel] ?? 3) - (impactOrd[b.impactLevel] ?? 3)
+    ));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortBy]);
 
   // Load more bills — used by IntersectionObserver
   const loadMore = useCallback(async () => {
@@ -147,7 +161,9 @@ export default function Home() {
         console.error('loadMore API error:', data.error || response.status);
         throw new Error(data.error || `Feed API returned ${response.status}`);
       }
-      // Append new items — they land at the end, preserving scroll position naturally
+      // Append new items at the END — do NOT re-sort here.
+      // The filteredItems block handles display sorting, but only rearranges
+      // within the initial batch. New items are appended in server order.
       setFeedItems(prev => [...prev, ...(data.items || [])]);
       setHasMore(data.hasMore || false);
       setNextOffset(data.nextOffset || 0);
@@ -288,22 +304,19 @@ export default function Home() {
   const canSeeState = isPro || isNative;
 
   const filteredItems = (() => {
-    let items;
+    // Only filter by tab — do NOT re-sort here.
+    // Items are sorted at load time (fetchBaseFeed) and appended in server order
+    // by loadMore. Re-sorting causes newly loaded items to jump to the top.
     if (activeTab === 'Federal') {
-      items = feedItems.filter(item => item.level === 'Federal');
+      return feedItems.filter(item => item.level === 'Federal');
     } else if (activeTab === 'State & Local') {
-      items = [...stateFeedItems];
+      return [...stateFeedItems];
     } else {
       // "All Updates" — merge federal + state
-      items = canSeeState
+      return canSeeState
         ? [...feedItems, ...stateFeedItems]
         : [...feedItems];
     }
-    // Sort based on the active filter
-    if (sortBy === 'recent') {
-      return [...items].sort((a, b) => new Date(b.latestActionDate || b.updateDate || b.date || 0) - new Date(a.latestActionDate || a.updateDate || a.date || 0));
-    }
-    return [...items].sort((a, b) => (impactOrder[a.impactLevel] ?? 3) - (impactOrder[b.impactLevel] ?? 3));
   })();
 
   return (
