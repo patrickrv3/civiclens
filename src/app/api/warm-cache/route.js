@@ -108,8 +108,7 @@ export async function GET(request) {
             const introPatterns = [
                 'read twice and referred',
                 'introduced in',
-                'referred to the committee',
-                'referred to the subcommittee',
+                'referred to',
                 'sponsor introductory remarks',
                 'reserved for',
             ];

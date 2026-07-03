@@ -167,8 +167,7 @@ export async function POST(request) {
         const introPatterns = [
             'read twice and referred',
             'introduced in',
-            'referred to the committee',
-            'referred to the subcommittee',
+            'referred to',          // catches all referrals (House/Senate committee, subcommittee)
             'sponsor introductory remarks',
             'reserved for',
         ];
