@@ -299,8 +299,16 @@ export async function POST(request) {
             .map(b => {
                 const item = allItemsById.get(b.id);
                 if (!item) return null;
-                // Attach dates from Congress.gov for accurate sorting and display
-                return { ...item, updateDate: b.updateDate, latestActionDate: b.latestActionDate };
+                // Use latestActionDate as the primary date so users see when
+                // the bill was last updated, not when it was introduced.
+                // Preserve the original AI-generated date as introducedDate.
+                return {
+                    ...item,
+                    introducedDate: item.date || '',
+                    date: b.latestActionDate || item.date || '',
+                    updateDate: b.updateDate,
+                    latestActionDate: b.latestActionDate,
+                };
             })
             .filter(Boolean);
 

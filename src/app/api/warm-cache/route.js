@@ -110,6 +110,7 @@ export async function GET(request) {
                     id: `${congressNum}-${typeUpper.toLowerCase()}-${b.number}`,
                     title: b.title,
                     latestAction: b.latestAction?.text || '',
+                    latestActionDate: b.latestAction?.actionDate || b.updateDate,
                     updateDate: b.updateDate,
                     url: `https://www.congress.gov/bill/${congressNum}th-congress/${slug}/${b.number}`,
                 };
@@ -136,8 +137,22 @@ export async function GET(request) {
                     continue;
                 }
                 const aiItems = parsed.bills || [];
-                await Promise.all(aiItems.map(item => item.id ? saveToCache(item) : Promise.resolve()));
-                billsWarmed += aiItems.length;
+                // Override AI-generated date with actual latestActionDate from Congress.gov
+                const uncachedById = new Map(uncached.map(u => [u.id, u]));
+                const enrichedItems = aiItems.map(item => {
+                    const src = uncachedById.get(item.id);
+                    if (src) {
+                        return {
+                            ...item,
+                            introducedDate: item.date || '',
+                            date: src.latestActionDate || item.date || '',
+                            latestActionDate: src.latestActionDate,
+                        };
+                    }
+                    return item;
+                });
+                await Promise.all(enrichedItems.map(item => item.id ? saveToCache(item) : Promise.resolve()));
+                billsWarmed += enrichedItems.length;
             }
         } catch (err) {
             errors.push(`Bills page ${page} failed: ${err.message}`);
