@@ -134,11 +134,9 @@ export async function POST(request) {
             );
         }
 
-        // 2. Fetch bills from Congress.gov sorted by most recently updated.
-        // Fetch a larger pool so we have enough after filtering to current congress
-        const fetchSize = 50;
-        // Fetch bills sorted by latest action (Congress.gov default)
-        const congressUrl = "https://api.congress.gov/v3/bill?api_key=" + process.env.CONGRESS_API_KEY +
+        // 2. Fetch bills from the 119th Congress (2025-2027) sorted by latest action
+        const fetchSize = 20;
+        const congressUrl = "https://api.congress.gov/v3/bill/119?api_key=" + process.env.CONGRESS_API_KEY +
             "&limit=" + fetchSize +
             "&offset=" + pageOffset +
             "&format=json";
@@ -154,11 +152,8 @@ export async function POST(request) {
         }
 
         const data = await congressRes.json();
-        // Keep only current congress (119th, 2025-2027) and limit to 12 for processing
-        // (parallel chunks of 4 keep each OpenAI call fast)
-        const bills = (data.bills || [])
-            .filter(b => b.congress >= 119)
-            .slice(0, 12);
+        // Limit to 12 for AI processing (parallel chunks of 4 keep each call fast)
+        const bills = (data.bills || []).slice(0, 12);
 
         // Bills filtered to current congress only
 

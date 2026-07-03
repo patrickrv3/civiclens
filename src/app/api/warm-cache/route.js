@@ -96,7 +96,7 @@ export async function GET(request) {
     for (let page = 0; page < 5; page++) {
         const offset = page * 10;
         try {
-            const url = `https://api.congress.gov/v3/bill?api_key=${process.env.CONGRESS_API_KEY}&limit=10&offset=${offset}&format=json`;
+            const url = `https://api.congress.gov/v3/bill/119?api_key=${process.env.CONGRESS_API_KEY}&limit=10&offset=${offset}&format=json`;
             const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
             if (!res.ok) { errors.push(`Congress API error at offset ${offset}: ${res.status}`); billPageErrors++; continue; }
             const data = await res.json();
