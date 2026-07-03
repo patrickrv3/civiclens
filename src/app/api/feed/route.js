@@ -138,10 +138,15 @@ export async function POST(request) {
         // Senate bills have the most recent legislative activity and represent
         // legislation with a real shot at becoming law. House bills that progress
         // will eventually appear here when they reach the Senate.
+        // Use fromDateTime (30 days) to get only recently-active bills.
         const fetchSize = 50;
+        const fromDate = new Date();
+        fromDate.setDate(fromDate.getDate() - 30);
+        const fromDateTime = fromDate.toISOString().split('.')[0] + 'Z';
         const congressUrl = "https://api.congress.gov/v3/bill/119/s?api_key=" + process.env.CONGRESS_API_KEY +
             "&limit=" + fetchSize +
             "&offset=" + pageOffset +
+            "&fromDateTime=" + fromDateTime +
             "&sort=updateDate" +
             "&sort_direction=desc" +
             "&format=json";

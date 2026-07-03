@@ -94,7 +94,10 @@ export async function GET(request) {
     // ── 2. Warm top 50 Senate bills by latest action date ─────────────────
     let billPageErrors = 0;
     try {
-        const url = `https://api.congress.gov/v3/bill/119/s?api_key=${process.env.CONGRESS_API_KEY}&limit=50&sort=updateDate&sort_direction=desc&format=json`;
+        const fromDate = new Date();
+        fromDate.setDate(fromDate.getDate() - 30);
+        const fromDateTime = fromDate.toISOString().split('.')[0] + 'Z';
+        const url = `https://api.congress.gov/v3/bill/119/s?api_key=${process.env.CONGRESS_API_KEY}&limit=50&fromDateTime=${fromDateTime}&sort=updateDate&sort_direction=desc&format=json`;
         const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
         if (!res.ok) {
             errors.push(`Congress API error: ${res.status}`);
