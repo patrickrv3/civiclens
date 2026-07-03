@@ -396,9 +396,30 @@ export async function POST(request) {
         const pagination = (lastData && lastData.pagination) || {};
         const hasMore = !!pagination.next;
 
+        // Temporary debug info
+        const sBills = allRawBills.filter(b => b.type === 'S');
+        const sBillNums = sBills.map(b => Number(b.number)).sort((a,b) => a-b);
+        const s629Data = allRawBills.find(b => b.type === 'S' && String(b.number) === '629');
+        const top5 = allRawBills
+            .filter(b => b.latestAction?.actionDate)
+            .sort((a, b) => new Date(b.latestAction.actionDate) - new Date(a.latestAction.actionDate))
+            .slice(0, 5)
+            .map(b => `${b.type}.${b.number}=${b.latestAction?.actionDate}:${(b.latestAction?.text||'').substring(0,40)}`);
+
         console.log(`Feed [${sortMode}]: ${cachedItems.length} cached, ${aiItems.length} from AI, hasMore=${hasMore}`);
 
-        return NextResponse.json({ items: orderedItems, hasMore, nextOffset: pageOffset + fetchSize });
+        return NextResponse.json({
+            items: orderedItems,
+            hasMore,
+            nextOffset: pageOffset + fetchSize,
+            _debug: {
+                totalRaw: allRawBills.length,
+                sBillCount: sBills.length,
+                sBillRange: sBillNums.length > 0 ? `${sBillNums[0]}-${sBillNums[sBillNums.length-1]}` : 'none',
+                s629: s629Data ? { action: s629Data.latestAction?.text, date: s629Data.latestAction?.actionDate, updateDate: s629Data.updateDate } : 'NOT FOUND',
+                top5ByActionDate: top5,
+            }
+        });
 
     } catch (error) {
         console.error("Error in feed API:", error);
