@@ -68,16 +68,9 @@ async function fetchBillPage(billType, offset) {
     }
 }
 
-// ── GET handler (called by Vercel Cron) ──────────────────────────────────────
-export async function GET(request) {
+// Shared logic used by both GET (cron) and POST (manual trigger)
+async function runBillScan() {
     const startTime = Date.now();
-
-    // Auth check
-    const authHeader = request.headers.get('authorization');
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || '' });
     const errors = [];
     let totalScanned = 0;
@@ -243,11 +236,22 @@ export async function GET(request) {
         console.warn('[warm-cache-bills] Health log failed:', e.message);
     }
 
-    return NextResponse.json({
-        success: errors.length === 0,
-        totalScanned,
-        billsWarmed,
-        errors,
-        durationMs,
-    }, errors.length > 0 && billsWarmed === 0 ? { status: 500 } : {});
+    return { success: errors.length === 0, totalScanned, billsWarmed, errors, durationMs };
+}
+
+// ── GET handler (called by Vercel Cron) ──────────────────────────────────────
+export async function GET(request) {
+    const authHeader = request.headers.get('authorization');
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const result = await runBillScan();
+    return NextResponse.json(result, !result.success && result.billsWarmed === 0 ? { status: 500 } : {});
+}
+
+// ── POST handler (manual trigger — no cron secret needed) ────────────────────
+// TODO: Remove this handler or add proper auth after initial setup
+export async function POST() {
+    const result = await runBillScan();
+    return NextResponse.json(result, !result.success && result.billsWarmed === 0 ? { status: 500 } : {});
 }
