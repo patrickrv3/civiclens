@@ -124,124 +124,112 @@ export async function POST(request) {
     try {
         const { lifeTags, interests, offset, sortBy } = await request.json();
         const pageOffset = offset || 0;
+        const PAGE_SIZE = 12;
         const sortMode = sortBy || 'impact'; // 'impact' | 'recent'
 
         // 1. Check for API keys
-        if (!process.env.OPENAI_API_KEY || !process.env.CONGRESS_API_KEY) {
+        if (!process.env.OPENAI_API_KEY) {
             return NextResponse.json(
-                { error: "API Keys missing. Please configure OPENAI_API_KEY and CONGRESS_API_KEY in .env.local" },
+                { error: "API Keys missing. Please configure OPENAI_API_KEY in .env.local" },
                 { status: 500 }
             );
         }
 
-        // 2. Fetch bills by type — S (Senate) and HR (House) separately.
-        // The API returns bills by bill number, so we need type-specific
-        // endpoints to reach high-numbered bills like S.629.
-        const fetchSize = 250;
-        let lastData = null;
+        // 2. Read the pre-built feed index from Firestore
+        //    This index is populated by the /api/warm-cache-bills cron job.
+        let indexBills = [];
+        try {
+            const indexSnap = await getDoc(doc(db, 'feedIndex', 'latestBills'));
+            if (indexSnap.exists()) {
+                const indexData = indexSnap.data();
+                indexBills = indexData.bills || [];
+                console.log(`Feed: loaded index with ${indexBills.length} bills (updated ${indexData.updatedAt})`);
+            }
+        } catch (err) {
+            console.warn('Feed: failed to read feed index:', err.message);
+        }
 
-        const introPatterns = [
-            'read twice and referred',
-            'introduced in',
-            'referred to',
-            'sponsor introductory remarks',
-            'reserved for',
-        ];
-
-        // Fetch from multiple bill types in parallel — no fromDateTime
-        // because it filters by metadata updateDate, NOT action date.
-        // Bills with recent floor action (like S.629, "Presented to President"
-        // June 30) may have old updateDates and would be excluded.
-        const billTypes = ['s', 'hr', 'hjres', 'sjres'];
-        const pagesPerType = { s: 3, hr: 3, hjres: 1, sjres: 1 };
-        let allRawBills = [];
-
-        const fetchPromises = [];
-        for (const billType of billTypes) {
-            const numPages = pagesPerType[billType] || 1;
-            for (let page = 0; page < numPages; page++) {
-                const offset = pageOffset + (page * fetchSize);
-                const url = "https://api.congress.gov/v3/bill/119/" + billType + "?api_key=" + process.env.CONGRESS_API_KEY +
-                    "&limit=" + fetchSize +
-                    "&offset=" + offset +
-                    "&format=json";
-                fetchPromises.push(
-                    fetchWithRetry(url)
-                        .then(res => res.ok ? res.json() : null)
-                        .then(data => {
-                            if (data) {
-                                lastData = lastData || data;
-                                return data.bills || [];
-                            }
-                            return [];
-                        })
-                        .catch(() => [])
+        // 3. Fallback: if no index exists, fetch directly from Congress.gov
+        //    This ensures the feed works before the first cron run.
+        if (indexBills.length === 0) {
+            console.log('Feed: no index found, falling back to direct Congress API fetch');
+            if (!process.env.CONGRESS_API_KEY) {
+                return NextResponse.json(
+                    { error: "Congress API key missing and no cached index available." },
+                    { status: 500 }
                 );
             }
+
+            const introPatterns = [
+                'read twice and referred', 'introduced in', 'referred to',
+                'sponsor introductory remarks', 'reserved for',
+            ];
+            const billTypes = ['s', 'hr', 'hjres', 'sjres'];
+            const pagesPerType = { s: 3, hr: 3, hjres: 1, sjres: 1 };
+            let allRawBills = [];
+            const fetchPromises = [];
+            for (const billType of billTypes) {
+                for (let page = 0; page < (pagesPerType[billType] || 1); page++) {
+                    const off = page * 250;
+                    const url = "https://api.congress.gov/v3/bill/119/" + billType +
+                        "?api_key=" + process.env.CONGRESS_API_KEY +
+                        "&limit=250&offset=" + off + "&format=json";
+                    fetchPromises.push(
+                        fetchWithRetry(url)
+                            .then(res => res.ok ? res.json() : null)
+                            .then(data => data ? (data.bills || []) : [])
+                            .catch(() => [])
+                    );
+                }
+            }
+            const results = await Promise.all(fetchPromises);
+            for (const pageBills of results) allRawBills = allRawBills.concat(pageBills);
+
+            const typeSlugMap = {
+                'HR': 'house-bill', 'S': 'senate-bill',
+                'HJRES': 'house-joint-resolution', 'SJRES': 'senate-joint-resolution',
+                'HCONRES': 'house-concurrent-resolution', 'SCONRES': 'senate-concurrent-resolution',
+                'HRES': 'house-resolution', 'SRES': 'senate-resolution',
+            };
+
+            indexBills = allRawBills
+                .filter(b => {
+                    if ((b.title || '').toLowerCase().includes('reserved for')) return false;
+                    const action = (b.latestAction?.text || '').toLowerCase();
+                    return !introPatterns.some(p => action.includes(p));
+                })
+                .sort((a, b) => new Date(b.latestAction?.actionDate || '2000-01-01') - new Date(a.latestAction?.actionDate || '2000-01-01'))
+                .slice(0, 100)
+                .map(b => {
+                    const congressNum = b.congress || 119;
+                    const typeUpper = (b.type || 'HR').toUpperCase();
+                    const slug = typeSlugMap[typeUpper] || 'house-bill';
+                    return {
+                        id: `${congressNum}-${typeUpper.toLowerCase()}-${b.number}`,
+                        type: typeUpper, number: b.number, congress: congressNum,
+                        title: b.title,
+                        latestAction: b.latestAction?.text || '',
+                        latestActionDate: b.latestAction?.actionDate || '',
+                        updateDate: b.updateDate || '',
+                        url: `https://www.congress.gov/bill/${congressNum}th-congress/${slug}/${b.number}`,
+                    };
+                });
         }
 
-        const results = await Promise.all(fetchPromises);
-        for (const pageBills of results) {
-            allRawBills = allRawBills.concat(pageBills);
-        }
-
-        // Filter for meaningful legislative action only
-        const bills = allRawBills
-            .filter(b => {
-                const title = (b.title || '').toLowerCase();
-                if (title.includes('reserved for')) return false;
-                const action = (b.latestAction?.text || '').toLowerCase();
-                return !introPatterns.some(p => action.includes(p));
-            })
-            .sort((a, b) => {
-                const dateA = new Date(a.latestAction?.actionDate || '2000-01-01');
-                const dateB = new Date(b.latestAction?.actionDate || '2000-01-01');
-                return dateB - dateA;
-            })
-            .slice(0, 12);
-
-        console.log(`Feed: ${allRawBills.length} raw bills across types, ${bills.length} after action filter`);
-        if (bills.length > 0) {
-            console.log(`Feed: newest action = ${bills[0].latestAction?.actionDate} — ${bills[0].title?.substring(0, 50)}`);
-        }
-
-        // If all windows failed, return error
-        if (bills.length === 0) {
+        // 4. No bills at all
+        if (indexBills.length === 0) {
             return NextResponse.json(
-                { error: 'No legislation with meaningful action found. Please try again.', items: [], hasMore: false },
+                { error: 'No legislation available. Please try again later.', items: [], hasMore: false },
                 { status: 502 }
             );
         }
 
-        // Bills filtered to current congress only
+        // 5. Paginate from the index
+        const pageBills = indexBills.slice(pageOffset, pageOffset + PAGE_SIZE);
+        const hasMore = (pageOffset + PAGE_SIZE) < indexBills.length;
 
-        // Map Congress API bill types to their Congress.gov URL slug
-        const typeSlugMap = {
-            'HR': 'house-bill',
-            'S': 'senate-bill',
-            'HJRES': 'house-joint-resolution',
-            'SJRES': 'senate-joint-resolution',
-            'HCONRES': 'house-concurrent-resolution',
-            'SCONRES': 'senate-concurrent-resolution',
-            'HRES': 'house-resolution',
-            'SRES': 'senate-resolution',
-        };
-
-        // Format all bills for lookup / potential AI processing
-        const billsForProcessing = bills.map((b) => {
-            const congressNum = b.congress || 118;
-            const typeUpper = b.type ? b.type.toUpperCase() : "HR";
-            const slug = typeSlugMap[typeUpper] || 'house-bill';
-            const url = "https://www.congress.gov/bill/" + congressNum + "th-congress/" + slug + "/" + b.number;
-            return {
-                id: congressNum + "-" + typeUpper.toLowerCase() + "-" + b.number,
-                title: b.title,
-                latestAction: b.latestAction?.text || "",
-                latestActionDate: b.latestAction?.actionDate || b.updateDate,
-                updateDate: b.updateDate,
-                url,
-            };
-        });
+        // 6. Map for processing — these are the bills we need summaries for
+        const billsForProcessing = pageBills;
 
         // 3. Check Firestore cache for each bill (in parallel)
         const cacheResults = await Promise.all(
@@ -376,12 +364,8 @@ export async function POST(request) {
             });
         }
 
-        const pagination = (lastData && lastData.pagination) || {};
-        const hasMore = !!pagination.next;
-
         console.log(`Feed [${sortMode}]: ${cachedItems.length} cached, ${aiItems.length} from AI, hasMore=${hasMore}`);
-
-        return NextResponse.json({ items: orderedItems, hasMore, nextOffset: pageOffset + fetchSize });
+        return NextResponse.json({ items: orderedItems, hasMore, nextOffset: pageOffset + PAGE_SIZE });
 
     } catch (error) {
         console.error("Error in feed API:", error);

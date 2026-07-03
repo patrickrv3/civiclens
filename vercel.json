@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/warm-cache-bills",
+      "schedule": "0 14 * * *"
+    },
+    {
       "path": "/api/warm-cache",
       "schedule": "0 16 * * *"
     }
