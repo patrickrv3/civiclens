@@ -322,12 +322,20 @@ export async function POST(request) {
 
         // 7. Server-side sort so the client always receives items in the right order.
         // Impact mode: High Impact first so the first cards the user sees are meaningful.
-        // Recent mode: preserve the updateDate desc order from Congress.gov.
-        if (sortMode === 'impact') {
+        // Recent mode: sort by actual latest action date (newest first).
+        // Impact mode: sort by impact level, then by date within each level.
+        if (sortMode === 'recent') {
+            orderedItems.sort((a, b) =>
+                new Date(b.latestActionDate || b.date || 0) - new Date(a.latestActionDate || a.date || 0)
+            );
+        } else {
             const impactRank = { 'High Impact': 0, 'Moderate Impact': 1, 'Low Impact': 2 };
-            orderedItems.sort((a, b) => (impactRank[a.impactLevel] ?? 3) - (impactRank[b.impactLevel] ?? 3));
+            orderedItems.sort((a, b) => {
+                const rankDiff = (impactRank[a.impactLevel] ?? 3) - (impactRank[b.impactLevel] ?? 3);
+                if (rankDiff !== 0) return rankDiff;
+                return new Date(b.latestActionDate || b.date || 0) - new Date(a.latestActionDate || a.date || 0);
+            });
         }
-        // 'recent' order is already correct — no sort needed
 
         const pagination = data.pagination || {};
         const hasMore = !!pagination.next;
