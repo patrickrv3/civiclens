@@ -134,12 +134,10 @@ export async function POST(request) {
             );
         }
 
-        // 2. Fetch bills from the 119th Congress with meaningful action.
-        // The API returns bills by bill number (ignores sort), so we need
-        // multiple pages to reach high-numbered bills like H.R.3350+.
-        // Fetch 3 pages × 250 = 750 bills to catch recently-passed ones.
+        // 2. Fetch bills by type — S (Senate) and HR (House) separately.
+        // The API returns bills by bill number, so we need type-specific
+        // endpoints to reach high-numbered bills like S.629.
         const fetchSize = 250;
-        let bills = [];
         let lastData = null;
 
         const introPatterns = [
@@ -150,56 +148,65 @@ export async function POST(request) {
             'reserved for',
         ];
 
-        for (const windowDays of [14, 60, 120]) {
-            const fromDate = new Date();
-            fromDate.setDate(fromDate.getDate() - windowDays);
-            const fromDateTime = fromDate.toISOString().split('.')[0] + 'Z';
+        const fromDate = new Date();
+        fromDate.setDate(fromDate.getDate() - 30);
+        const fromDateTime = fromDate.toISOString().split('.')[0] + 'Z';
 
-            // Fetch multiple pages to cover high bill numbers
-            let allRawBills = [];
-            for (let page = 0; page < 3; page++) {
+        // Fetch from multiple bill types in parallel
+        const billTypes = ['s', 'hr', 'hres', 'sjres', 'hjres', 'sres'];
+        const pagesPerType = { s: 3, hr: 3, hres: 1, sjres: 1, hjres: 1, sres: 1 };
+        let allRawBills = [];
+
+        const fetchPromises = [];
+        for (const billType of billTypes) {
+            const numPages = pagesPerType[billType] || 1;
+            for (let page = 0; page < numPages; page++) {
                 const offset = pageOffset + (page * fetchSize);
-                const congressUrl = "https://api.congress.gov/v3/bill/119?api_key=" + process.env.CONGRESS_API_KEY +
+                const url = "https://api.congress.gov/v3/bill/119/" + billType + "?api_key=" + process.env.CONGRESS_API_KEY +
                     "&limit=" + fetchSize +
                     "&offset=" + offset +
                     "&fromDateTime=" + fromDateTime +
                     "&sort=updateDate" +
                     "&sort_direction=desc" +
                     "&format=json";
-                try {
-                    const congressRes = await fetchWithRetry(congressUrl);
-                    if (!congressRes.ok) {
-                        console.error(`Congress API Error (page ${page}): ${congressRes.status}`);
-                        break;
-                    }
-                    const data = await congressRes.json();
-                    lastData = data;
-                    const pageBills = data.bills || [];
-                    allRawBills = allRawBills.concat(pageBills);
-                    if (pageBills.length < fetchSize) break; // no more pages
-                } catch (err) {
-                    console.error(`Congress fetch page ${page} failed:`, err.message);
-                    break;
-                }
+                fetchPromises.push(
+                    fetchWithRetry(url)
+                        .then(res => res.ok ? res.json() : null)
+                        .then(data => {
+                            if (data) {
+                                lastData = lastData || data;
+                                return data.bills || [];
+                            }
+                            return [];
+                        })
+                        .catch(() => [])
+                );
             }
+        }
 
-            // Filter for meaningful legislative action only
-            bills = allRawBills
-                .filter(b => {
-                    const title = (b.title || '').toLowerCase();
-                    if (title.includes('reserved for')) return false;
-                    const action = (b.latestAction?.text || '').toLowerCase();
-                    return !introPatterns.some(p => action.includes(p));
-                })
-                .sort((a, b) => {
-                    const dateA = new Date(a.latestAction?.actionDate || '2000-01-01');
-                    const dateB = new Date(b.latestAction?.actionDate || '2000-01-01');
-                    return dateB - dateA;
-                })
-                .slice(0, 12);
+        const results = await Promise.all(fetchPromises);
+        for (const pageBills of results) {
+            allRawBills = allRawBills.concat(pageBills);
+        }
 
-            console.log(`Feed: ${windowDays}d window → ${allRawBills.length} raw, ${bills.length} after action filter`);
-            if (bills.length >= 6) break;
+        // Filter for meaningful legislative action only
+        const bills = allRawBills
+            .filter(b => {
+                const title = (b.title || '').toLowerCase();
+                if (title.includes('reserved for')) return false;
+                const action = (b.latestAction?.text || '').toLowerCase();
+                return !introPatterns.some(p => action.includes(p));
+            })
+            .sort((a, b) => {
+                const dateA = new Date(a.latestAction?.actionDate || '2000-01-01');
+                const dateB = new Date(b.latestAction?.actionDate || '2000-01-01');
+                return dateB - dateA;
+            })
+            .slice(0, 12);
+
+        console.log(`Feed: ${allRawBills.length} raw bills across types, ${bills.length} after action filter`);
+        if (bills.length > 0) {
+            console.log(`Feed: newest action = ${bills[0].latestAction?.actionDate} — ${bills[0].title?.substring(0, 50)}`);
         }
 
         // If all windows failed, return error
