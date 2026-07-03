@@ -28,6 +28,20 @@ service cloud.firestore {
       }
     }
 
+    // ── Feed index (pre-built bill list for fast feed loads) ───────────────────
+    // Open read/write — populated by warm-cache-bills cron, read by feed route.
+    match /feedIndex/{docId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // ── Cron health logs ─────────────────────────────────────────────────────
+    // Open read/write — server routes log cron job results here.
+    match /cronHealth/{docId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
     // Block everything else by default
     match /{document=**} {
       allow read, write: if false;

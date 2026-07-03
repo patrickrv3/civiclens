@@ -20,8 +20,20 @@ const db = getFirestore(app);
 const CACHE_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
 
 const BILL_PROMPT = `You are an expert, neutral, nonpartisan civic analyst.
-Summarize each bill and return ONLY valid JSON:
-{ "bills": [ { "id": "...", "shortTitle": "...", "originalTitle": "...", "url": "...", "type": "Bill", "level": "Federal", "date": "...", "generalSummary": "...", "impactLevel": "High Impact|Moderate Impact|Low Impact", "status": "Introduced|In Committee|Passed House|Passed Senate|Passed Both Chambers|Signed into Law|Failed", "latestAction": "...", "tagImpacts": {}, "sponsors": [], "locationMatches": [], "likes": 0, "dislikes": 0 } ] }`;
+Summarize each bill. For the "status" field, classify using these STRICT rules based on latestAction:
+- "Introduced": ONLY if action says "introduced" or "read twice and referred".
+- "In Committee": "referred to committee", "subcommittee hearings held", "ordered to be reported", "markup".
+- "Reported": "placed on calendar", "reported by committee", "union calendar".
+- "Passed House": "passed House", "agreed to in House", "motion to reconsider laid on the table" (House).
+- "Passed Senate": "passed Senate", "agreed to in Senate".
+- "Passed Both Chambers": "resolving differences", "enrolled bill".
+- "Presented to President": "presented to President".
+- "Signed into Law": "became public law", "signed by President".
+- "Failed": "failed", "vetoed", "cloture not invoked".
+Do NOT label a bill "Introduced" if it has progressed past introduction.
+
+Return ONLY valid JSON:
+{ "bills": [ { "id": "...", "shortTitle": "...", "originalTitle": "...", "url": "...", "type": "Bill", "level": "Federal", "date": "...", "generalSummary": "...", "impactLevel": "High Impact|Moderate Impact|Low Impact", "status": "...", "latestAction": "...", "tagImpacts": {}, "sponsors": [], "locationMatches": [], "likes": 0, "dislikes": 0 } ] }`;
 
 const typeSlugMap = {
     'HR': 'house-bill', 'S': 'senate-bill',

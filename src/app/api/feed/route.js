@@ -79,7 +79,17 @@ For each bill, provide:
   * "Moderate Impact": Bills affecting specific industries, regions, or groups — regulatory changes, agency funding, infrastructure for specific areas, amendments to existing programs.
   * "Low Impact": Purely symbolic bills — naming post offices/buildings, commemorative coins, honorary designations, awareness days/months, minor technical corrections with no policy change.
   IMPORTANT: Err toward "High Impact" for any bill dealing with federal money, rights, or services that affect millions of people.
-- status: Based on the latestAction, classify as one of: "Introduced", "In Committee", "Passed House", "Passed Senate", "Passed Both Chambers", "Signed into Law", or "Failed". Use your best judgment based on the action text.
+- status: Based on the latestAction text, classify using these STRICT rules:
+  * "Introduced": ONLY if action says "introduced" or "read twice and referred" — the bill has done nothing beyond introduction.
+  * "In Committee": Action mentions "referred to committee", "subcommittee hearings held", "committee consideration", "ordered to be reported", or "markup".
+  * "Reported": Action mentions "placed on calendar", "reported by committee", "reported with amendments", or "union calendar".
+  * "Passed House": Action explicitly says "passed House", "agreed to in House", "motion to reconsider laid on the table" (House context).
+  * "Passed Senate": Action explicitly says "passed Senate", "agreed to in Senate", "resolution agreed to in Senate".
+  * "Passed Both Chambers": Action says "passed both chambers", "resolving differences", or "enrolled bill".
+  * "Presented to President": Action says "presented to President" or "sent to President".
+  * "Signed into Law": Action says "became public law", "signed by President", or "became law".
+  * "Failed": Action says "failed", "vetoed", "cloture not invoked", or "motion rejected".
+  IMPORTANT: Do NOT use "Introduced" for bills that have progressed past introduction. Read the latestAction carefully.
 - latestAction: Pass through the latestAction text exactly as provided.
 - tagImpacts: A JSON object where keys are the specific Life Tags provided, and values are a 1-sentence explanation of why this bill matters to someone with that tag. Only include tags that actually have a relevant impact.
 
