@@ -262,10 +262,3 @@ export async function GET(request) {
     const result = await runBillScan();
     return NextResponse.json(result, !result.success && result.billsWarmed === 0 ? { status: 500 } : {});
 }
-
-// ── POST handler (manual trigger — no cron secret needed) ────────────────────
-// TODO: Remove this handler or add proper auth after initial setup
-export async function POST() {
-    const result = await runBillScan();
-    return NextResponse.json(result, !result.success && result.billsWarmed === 0 ? { status: 500 } : {});
-}
