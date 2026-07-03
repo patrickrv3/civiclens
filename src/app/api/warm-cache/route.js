@@ -94,82 +94,87 @@ export async function GET(request) {
     // ── 2. Warm top 50 bills by latest action date ──────────────────────────
     let billPageErrors = 0;
     try {
-        const url = `https://api.congress.gov/v3/bill/119?api_key=${process.env.CONGRESS_API_KEY}&limit=250&sort=updateDate&sort_direction=desc&format=json`;
+        const fromDate = new Date();
+        fromDate.setDate(fromDate.getDate() - 90);
+        const fromDateTime = fromDate.toISOString().split('.')[0] + 'Z';
+        const url = `https://api.congress.gov/v3/bill/119?api_key=${process.env.CONGRESS_API_KEY}&limit=250&fromDateTime=${fromDateTime}&sort=updateDate&sort_direction=desc&format=json`;
         const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
-        if (!res.ok) { errors.push(`Congress API error: ${res.status}`); billPageErrors = 5; }
-        else {
-        const data = await res.json();
-        // Sort by actual latest action date and filter placeholders
-        const allBills = (data.bills || [])
-            .filter(b => !(b.title || '').toLowerCase().includes('reserved for'))
-            .sort((a, b) => {
-                const dateA = new Date(a.latestAction?.actionDate || '2000-01-01');
-                const dateB = new Date(b.latestAction?.actionDate || '2000-01-01');
-                return dateB - dateA;
-            });
-
-        // Process in pages of 10 (up to 50 total)
-        for (let page = 0; page < 5; page++) {
-            const bills = allBills.slice(page * 10, (page + 1) * 10);
-            if (bills.length === 0) break;
-
-            const forProcessing = bills.map(b => {
-                const congressNum = b.congress || 118;
-                const typeUpper = (b.type || 'HR').toUpperCase();
-                const slug = typeSlugMap[typeUpper] || 'house-bill';
-                return {
-                    id: `${congressNum}-${typeUpper.toLowerCase()}-${b.number}`,
-                    title: b.title,
-                    latestAction: b.latestAction?.text || '',
-                    latestActionDate: b.latestAction?.actionDate || b.updateDate,
-                    updateDate: b.updateDate,
-                    url: `https://www.congress.gov/bill/${congressNum}th-congress/${slug}/${b.number}`,
-                };
-            });
-
-            // Only process uncached bills
-            const cached = await Promise.all(forProcessing.map(b => isCached(b.id)));
-            const uncached = forProcessing.filter((_, i) => !cached[i]);
-
-            if (uncached.length > 0) {
-                const completion = await openai.chat.completions.create({
-                    model: 'gpt-4o-mini',
-                    messages: [
-                        { role: 'system', content: BILL_PROMPT },
-                        { role: 'user', content: `Summarize these bills:\n${JSON.stringify(uncached, null, 2)}` },
-                    ],
-                    response_format: { type: 'json_object' },
-                }, { signal: AbortSignal.timeout(45000) });
-                let parsed;
-                try {
-                    parsed = JSON.parse(completion.choices[0].message.content);
-                } catch (parseErr) {
-                    console.warn('[AI] Failed to parse AI response for bills:', parseErr.message);
-                    continue;
-                }
-                const aiItems = parsed.bills || [];
-                // Override AI-generated date with actual latestActionDate from Congress.gov
-                const uncachedById = new Map(uncached.map(u => [u.id, u]));
-                const enrichedItems = aiItems.map(item => {
-                    const src = uncachedById.get(item.id);
-                    if (src) {
-                        return {
-                            ...item,
-                            introducedDate: item.date || '',
-                            date: src.latestActionDate || item.date || '',
-                            latestActionDate: src.latestActionDate,
-                        };
-                    }
-                    return item;
+        if (!res.ok) {
+            errors.push(`Congress API error: ${res.status}`);
+            billPageErrors = 5;
+        } else {
+            const data = await res.json();
+            // Sort by actual latest action date and filter placeholders
+            const allBills = (data.bills || [])
+                .filter(b => !(b.title || '').toLowerCase().includes('reserved for'))
+                .sort((a, b) => {
+                    const dateA = new Date(a.latestAction?.actionDate || '2000-01-01');
+                    const dateB = new Date(b.latestAction?.actionDate || '2000-01-01');
+                    return dateB - dateA;
                 });
-                await Promise.all(enrichedItems.map(item => item.id ? saveToCache(item) : Promise.resolve()));
-                billsWarmed += enrichedItems.length;
+
+            // Process in pages of 10 (up to 50 total)
+            for (let page = 0; page < 5; page++) {
+                const bills = allBills.slice(page * 10, (page + 1) * 10);
+                if (bills.length === 0) break;
+                try {
+                    const forProcessing = bills.map(b => {
+                        const congressNum = b.congress || 118;
+                        const typeUpper = (b.type || 'HR').toUpperCase();
+                        const slug = typeSlugMap[typeUpper] || 'house-bill';
+                        return {
+                            id: `${congressNum}-${typeUpper.toLowerCase()}-${b.number}`,
+                            title: b.title,
+                            latestAction: b.latestAction?.text || '',
+                            latestActionDate: b.latestAction?.actionDate || b.updateDate,
+                            updateDate: b.updateDate,
+                            url: `https://www.congress.gov/bill/${congressNum}th-congress/${slug}/${b.number}`,
+                        };
+                    });
+
+                    // Only process uncached bills
+                    const cached = await Promise.all(forProcessing.map(b => isCached(b.id)));
+                    const uncached = forProcessing.filter((_, i) => !cached[i]);
+
+                    if (uncached.length > 0) {
+                        const completion = await openai.chat.completions.create({
+                            model: 'gpt-4o-mini',
+                            messages: [
+                                { role: 'system', content: BILL_PROMPT },
+                                { role: 'user', content: `Summarize these bills:\n${JSON.stringify(uncached, null, 2)}` },
+                            ],
+                            response_format: { type: 'json_object' },
+                        }, { signal: AbortSignal.timeout(45000) });
+                        let parsed;
+                        try {
+                            parsed = JSON.parse(completion.choices[0].message.content);
+                        } catch (parseErr) {
+                            console.warn('[AI] Failed to parse AI response for bills:', parseErr.message);
+                            continue;
+                        }
+                        const aiItems = parsed.bills || [];
+                        // Override AI-generated date with actual latestActionDate from Congress.gov
+                        const uncachedById = new Map(uncached.map(u => [u.id, u]));
+                        const enrichedItems = aiItems.map(item => {
+                            const src = uncachedById.get(item.id);
+                            if (src) {
+                                return {
+                                    ...item,
+                                    introducedDate: item.date || '',
+                                    date: src.latestActionDate || item.date || '',
+                                    latestActionDate: src.latestActionDate,
+                                };
+                            }
+                            return item;
+                        });
+                        await Promise.all(enrichedItems.map(item => item.id ? saveToCache(item) : Promise.resolve()));
+                        billsWarmed += enrichedItems.length;
+                    }
+                } catch (err) {
+                    errors.push(`Bills page ${page} failed: ${err.message}`);
+                    billPageErrors++;
+                }
             }
-        } catch (err) {
-            errors.push(`Bills page ${page} failed: ${err.message}`);
-            billPageErrors++;
-        }
-        }
         }
     } catch (err) {
         errors.push(`Congress API fetch failed: ${err.message}`);

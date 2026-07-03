@@ -135,13 +135,17 @@ export async function POST(request) {
         }
 
         // 2. Fetch bills from the 119th Congress (2025-2027)
-        // Use sort=updateDate desc to get recently-touched bills from the API,
+        // Use fromDateTime to get bills updated in the last 90 days (avoids old
+        // bulk metadata updates), sort=updateDate desc to get most recent first,
         // then re-sort by actual latestAction date on our side.
-        // Without updateDate sort, the API returns by bill number (all Jan 2025).
         const fetchSize = 250;
+        const fromDate = new Date();
+        fromDate.setDate(fromDate.getDate() - 90);
+        const fromDateTime = fromDate.toISOString().split('.')[0] + 'Z';
         const congressUrl = "https://api.congress.gov/v3/bill/119?api_key=" + process.env.CONGRESS_API_KEY +
             "&limit=" + fetchSize +
             "&offset=" + pageOffset +
+            "&fromDateTime=" + fromDateTime +
             "&sort=updateDate" +
             "&sort_direction=desc" +
             "&format=json";
