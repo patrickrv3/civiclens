@@ -154,8 +154,13 @@ export async function POST(request) {
         }
 
         const data = await congressRes.json();
-        // Limit to 12 for AI processing (parallel chunks of 4 keep each call fast)
-        const bills = (data.bills || []).slice(0, 12);
+        // Filter out placeholder bills (e.g., "Reserved for the Speaker") and limit to 12
+        const bills = (data.bills || [])
+            .filter(b => {
+                const title = (b.title || '').toLowerCase();
+                return !title.includes('reserved for');
+            })
+            .slice(0, 12);
 
         // Bills filtered to current congress only
 
