@@ -185,6 +185,23 @@ export async function POST(request) {
             allRawBills = allRawBills.concat(pageBills);
         }
 
+        // DEBUG: check what the API returns for key bills
+        const s629 = allRawBills.find(b => b.type === 'S' && String(b.number) === '629');
+        if (s629) {
+            console.log(`DEBUG S.629 FOUND: action="${s629.latestAction?.text}", date="${s629.latestAction?.actionDate}", updateDate="${s629.updateDate}"`);
+        } else {
+            console.log(`DEBUG S.629 NOT FOUND in ${allRawBills.length} raw bills`);
+            // Log what S bill numbers we DO have
+            const sBills = allRawBills.filter(b => b.type === 'S').map(b => Number(b.number)).sort((a,b) => a-b);
+            console.log(`DEBUG S bills range: ${sBills[0]}-${sBills[sBills.length-1]} (${sBills.length} total)`);
+        }
+        // Log a few bills with most recent actions
+        const recentActions = allRawBills
+            .filter(b => b.latestAction?.actionDate)
+            .sort((a, b) => new Date(b.latestAction.actionDate) - new Date(a.latestAction.actionDate))
+            .slice(0, 5);
+        console.log(`DEBUG top 5 by action date: ${recentActions.map(b => `${b.type}.${b.number}=${b.latestAction?.actionDate}`).join(', ')}`);
+
         // Filter for meaningful legislative action only
         const bills = allRawBills
             .filter(b => {
