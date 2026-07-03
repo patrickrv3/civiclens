@@ -137,16 +137,10 @@ export async function POST(request) {
         // 2. Fetch bills from Congress.gov sorted by most recently updated.
         // Fetch a larger pool so we have enough after filtering to current congress
         const fetchSize = 50;
-        // Only fetch bills updated in the last 90 days (API-level pre-filter)
-        const fromDate = new Date();
-        fromDate.setDate(fromDate.getDate() - 90);
-        const fromDateTime = fromDate.toISOString().split('.')[0] + 'Z';
+        // Fetch bills sorted by latest action (Congress.gov default)
         const congressUrl = "https://api.congress.gov/v3/bill?api_key=" + process.env.CONGRESS_API_KEY +
             "&limit=" + fetchSize +
             "&offset=" + pageOffset +
-            "&fromDateTime=" + fromDateTime +
-            "&sort=updateDate" +
-            "&sort_direction=desc" +
             "&format=json";
         const congressRes = await fetchWithRetry(congressUrl);
 

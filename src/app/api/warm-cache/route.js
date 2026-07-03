@@ -66,7 +66,7 @@ export async function GET(request) {
     let eosError = false;
     let rulingsError = false;
 
-    const fromDateTime = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
 
     // ── 1. Warm court rulings (most time-sensitive, runs first) ─────────────
     try {
@@ -96,11 +96,11 @@ export async function GET(request) {
     for (let page = 0; page < 5; page++) {
         const offset = page * 10;
         try {
-            const url = `https://api.congress.gov/v3/bill?api_key=${process.env.CONGRESS_API_KEY}&limit=10&offset=${offset}&fromDateTime=${fromDateTime}T00:00:00Z&format=json`;
+            const url = `https://api.congress.gov/v3/bill?api_key=${process.env.CONGRESS_API_KEY}&limit=10&offset=${offset}&format=json`;
             const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
             if (!res.ok) { errors.push(`Congress API error at offset ${offset}: ${res.status}`); billPageErrors++; continue; }
             const data = await res.json();
-            const bills = (data.bills || []).sort((a, b) => new Date(b.updateDate) - new Date(a.updateDate));
+            const bills = data.bills || [];
 
             const forProcessing = bills.map(b => {
                 const congressNum = b.congress || 118;
