@@ -32,6 +32,8 @@ Summarize each bill. For the "status" field, classify using these STRICT rules b
 - "Failed": "failed", "vetoed", "cloture not invoked".
 Do NOT label a bill "Introduced" if it has progressed past introduction.
 
+For "generalSummary": explain the SPECIFIC policy change in 2 sentences max. NEVER write vague summaries like "addresses issues related to X". If the title references a name (e.g. "Lulu's Law"), explain the SUBSTANCE. Use your knowledge of the bill.
+
 Return ONLY valid JSON:
 { "bills": [ { "id": "...", "shortTitle": "...", "originalTitle": "...", "url": "...", "type": "Bill", "level": "Federal", "date": "...", "generalSummary": "...", "impactLevel": "High Impact|Moderate Impact|Low Impact", "status": "...", "latestAction": "...", "tagImpacts": {}, "sponsors": [], "locationMatches": [], "likes": 0, "dislikes": 0 } ] }`;
 

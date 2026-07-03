@@ -152,11 +152,17 @@ export default function FeedCard({ item, profile }) {
                 const statusColors = {
                     'Introduced': { bg: '#f3f4f6', color: '#4b5563' },
                     'In Committee': { bg: '#dbeafe', color: '#1d4ed8' },
+                    'Reported': { bg: '#fef3c7', color: '#d97706' },
                     'Passed House': { bg: '#ede9fe', color: '#7c3aed' },
                     'Passed Senate': { bg: '#ede9fe', color: '#7c3aed' },
                     'Passed Both Chambers': { bg: '#fce7f3', color: '#be185d' },
+                    'Presented to President': { bg: '#fce7f3', color: '#be185d' },
                     'Signed into Law': { bg: '#dcfce7', color: '#16a34a' },
                     'Failed': { bg: '#fee2e2', color: '#dc2626' },
+                    'Rejected': { bg: '#fee2e2', color: '#dc2626' },
+                    'Rejected in Senate': { bg: '#fee2e2', color: '#dc2626' },
+                    'Rejected in House': { bg: '#fee2e2', color: '#dc2626' },
+                    'Vetoed': { bg: '#fee2e2', color: '#dc2626' },
                     // Court ruling statuses
                     'Affirmed': { bg: '#dcfce7', color: '#16a34a' },
                     'Reversed': { bg: '#fee2e2', color: '#dc2626' },
@@ -174,7 +180,14 @@ export default function FeedCard({ item, profile }) {
                     'Not Available': { bg: '#f3f4f6', color: '#6b7280' },
                     'Unclear': { bg: '#f3f4f6', color: '#6b7280' },
                 };
-                const sc = statusColors[item.status] || statusColors['Introduced'];
+                // Catch-all: if status contains "rejected", "failed", or "vetoed", use red
+                const statusLower = item.status.toLowerCase();
+                const sc = statusColors[item.status]
+                    || (statusLower.includes('rejected') || statusLower.includes('failed') || statusLower.includes('vetoed')
+                        ? { bg: '#fee2e2', color: '#dc2626' }
+                        : statusLower.includes('passed') || statusLower.includes('signed') || statusLower.includes('law')
+                            ? { bg: '#dcfce7', color: '#16a34a' }
+                            : statusColors['Introduced']);
                 return (
                     <div style={{ marginBottom: '6px' }}>
                         <span style={{

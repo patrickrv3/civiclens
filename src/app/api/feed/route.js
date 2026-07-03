@@ -73,7 +73,7 @@ Your job is to read raw legislative text/summaries and output a JSON array of bi
 For each bill, provide:
 - shortTitle: A very short, punchy title for the bill (Max 5-8 words) that is easy for a normal person to read.
 - originalTitle: The exact original title provided in the raw text.
-- generalSummary: A simple, plain-English summary of what the bill does. Maximum 2 sentences.
+- generalSummary: A simple, plain-English summary of what the bill SPECIFICALLY does. Maximum 2 sentences. You MUST explain the concrete policy change — what it creates, funds, bans, or changes. If the title references a name (e.g. "Lulu's Law"), explain the SUBSTANCE, not just the name. NEVER write vague summaries like "addresses issues related to X" or "deals with matters concerning Y" — those are UNACCEPTABLE. Use your knowledge of the bill if the title alone is ambiguous.
 - impactLevel: One of "High Impact", "Moderate Impact", or "Low Impact". Use these strict criteria:
   * "High Impact": Bills that broadly affect Americans' daily lives — taxes, healthcare, immigration, housing, education, environment, national security, federal spending (appropriations), gun policy, social programs, voting rights, or any bill that has PASSED at least one chamber of Congress.
   * "Moderate Impact": Bills affecting specific industries, regions, or groups — regulatory changes, agency funding, infrastructure for specific areas, amendments to existing programs.
