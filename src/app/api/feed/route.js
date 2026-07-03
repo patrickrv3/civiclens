@@ -134,45 +134,57 @@ export async function POST(request) {
             );
         }
 
-        // 2. Fetch all bills from the 119th Congress with meaningful action.
-        // Use a short window (14 days) so recently-passed bills aren't buried
-        // behind thousands of low-numbered intro-only bills.
-        // If not enough results, widen to 90 days.
+        // 2. Fetch bills from the 119th Congress with meaningful action.
+        // The API returns bills by bill number (ignores sort), so we need
+        // multiple pages to reach high-numbered bills like H.R.3350+.
+        // Fetch 3 pages × 250 = 750 bills to catch recently-passed ones.
         const fetchSize = 250;
         let bills = [];
         let lastData = null;
 
-        for (const window of [14, 60, 120]) {
-            const fromDate = new Date();
-            fromDate.setDate(fromDate.getDate() - window);
-            const fromDateTime = fromDate.toISOString().split('.')[0] + 'Z';
-            const congressUrl = "https://api.congress.gov/v3/bill/119?api_key=" + process.env.CONGRESS_API_KEY +
-                "&limit=" + fetchSize +
-                "&offset=" + pageOffset +
-                "&fromDateTime=" + fromDateTime +
-                "&sort=updateDate" +
-                "&sort_direction=desc" +
-                "&format=json";
-            const congressRes = await fetchWithRetry(congressUrl);
+        const introPatterns = [
+            'read twice and referred',
+            'introduced in',
+            'referred to',
+            'sponsor introductory remarks',
+            'reserved for',
+        ];
 
-            if (!congressRes.ok) {
-                const errorText = await congressRes.text().catch(() => 'Unknown error');
-                console.error(`Congress API Error (${window}d window): ${congressRes.status} - ${errorText}`);
-                continue; // try wider window
+        for (const windowDays of [14, 60, 120]) {
+            const fromDate = new Date();
+            fromDate.setDate(fromDate.getDate() - windowDays);
+            const fromDateTime = fromDate.toISOString().split('.')[0] + 'Z';
+
+            // Fetch multiple pages to cover high bill numbers
+            let allRawBills = [];
+            for (let page = 0; page < 3; page++) {
+                const offset = pageOffset + (page * fetchSize);
+                const congressUrl = "https://api.congress.gov/v3/bill/119?api_key=" + process.env.CONGRESS_API_KEY +
+                    "&limit=" + fetchSize +
+                    "&offset=" + offset +
+                    "&fromDateTime=" + fromDateTime +
+                    "&sort=updateDate" +
+                    "&sort_direction=desc" +
+                    "&format=json";
+                try {
+                    const congressRes = await fetchWithRetry(congressUrl);
+                    if (!congressRes.ok) {
+                        console.error(`Congress API Error (page ${page}): ${congressRes.status}`);
+                        break;
+                    }
+                    const data = await congressRes.json();
+                    lastData = data;
+                    const pageBills = data.bills || [];
+                    allRawBills = allRawBills.concat(pageBills);
+                    if (pageBills.length < fetchSize) break; // no more pages
+                } catch (err) {
+                    console.error(`Congress fetch page ${page} failed:`, err.message);
+                    break;
+                }
             }
 
-            const data = await congressRes.json();
-            lastData = data;
-
-            // Filter: only bills with meaningful legislative action.
-            const introPatterns = [
-                'read twice and referred',
-                'introduced in',
-                'referred to',
-                'sponsor introductory remarks',
-                'reserved for',
-            ];
-            bills = (data.bills || [])
+            // Filter for meaningful legislative action only
+            bills = allRawBills
                 .filter(b => {
                     const title = (b.title || '').toLowerCase();
                     if (title.includes('reserved for')) return false;
@@ -186,8 +198,8 @@ export async function POST(request) {
                 })
                 .slice(0, 12);
 
-            console.log(`Feed: ${window}d window → ${(data.bills || []).length} raw, ${bills.length} after action filter`);
-            if (bills.length >= 6) break; // enough meaningful bills found
+            console.log(`Feed: ${windowDays}d window → ${allRawBills.length} raw, ${bills.length} after action filter`);
+            if (bills.length >= 6) break;
         }
 
         // If all windows failed, return error
