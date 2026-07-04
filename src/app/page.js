@@ -123,13 +123,16 @@ export default function Home() {
 
   // Re-sort items when user toggles sort mode
   useEffect(() => {
-    if (feedItems.length === 0) return;
     const impactOrd = { 'High Impact': 0, 'Moderate Impact': 1, 'Low Impact': 2 };
-    setFeedItems(prev => [...prev].sort(
-      sortBy === 'recent'
-        ? (a, b) => new Date(b.latestActionDate || b.updateDate || b.date || 0) - new Date(a.latestActionDate || a.updateDate || a.date || 0)
-        : (a, b) => (impactOrd[a.impactLevel] ?? 3) - (impactOrd[b.impactLevel] ?? 3)
-    ));
+    const sorter = sortBy === 'recent'
+      ? (a, b) => new Date(b.latestActionDate || b.updateDate || b.date || 0) - new Date(a.latestActionDate || a.updateDate || a.date || 0)
+      : (a, b) => (impactOrd[a.impactLevel] ?? 3) - (impactOrd[b.impactLevel] ?? 3);
+    if (feedItems.length > 0) {
+      setFeedItems(prev => [...prev].sort(sorter));
+    }
+    if (stateFeedItems.length > 0) {
+      setStateFeedItems(prev => [...prev].sort(sorter));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortBy]);
 
@@ -304,18 +307,21 @@ export default function Home() {
   const canSeeState = isPro || isNative;
 
   const filteredItems = (() => {
-    // Only filter by tab — do NOT re-sort here.
-    // Items are sorted at load time (fetchBaseFeed) and appended in server order
-    // by loadMore. Re-sorting causes newly loaded items to jump to the top.
+    const impactOrd = { 'High Impact': 0, 'Moderate Impact': 1, 'Low Impact': 2 };
+    const sorter = sortBy === 'recent'
+      ? (a, b) => new Date(b.latestActionDate || b.updateDate || b.date || 0) - new Date(a.latestActionDate || a.updateDate || a.date || 0)
+      : (a, b) => (impactOrd[a.impactLevel] ?? 3) - (impactOrd[b.impactLevel] ?? 3);
+
     if (activeTab === 'Federal') {
       return feedItems.filter(item => item.level === 'Federal');
     } else if (activeTab === 'State & Local') {
       return [...stateFeedItems];
     } else {
-      // "All Updates" — merge federal + state
-      return canSeeState
+      // "All Updates" — merge federal + state, then sort together
+      const merged = canSeeState
         ? [...feedItems, ...stateFeedItems]
         : [...feedItems];
+      return merged.sort(sorter);
     }
   })();
 
