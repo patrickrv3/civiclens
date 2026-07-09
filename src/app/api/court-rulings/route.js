@@ -398,7 +398,11 @@ export async function POST(request) {
     }
 
     try {
-        const { lifeTags, interests, forceRefresh } = await request.json();
+        const { lifeTags, interests, forceRefresh: rawForceRefresh } = await request.json();
+
+        // Only honor forceRefresh from the internal cron (checks CRON_SECRET in warm-cache)
+        // Public users cannot trigger expensive full refreshes
+        const forceRefresh = rawForceRefresh && request.headers.get('x-internal-cron') === 'true';
 
         // Step 1: Check if any court cache needs refreshing
         const [scotusCache, appealsCache, districtCache] = await Promise.all([
@@ -419,7 +423,7 @@ export async function POST(request) {
             // If we have cached data and it's been a long time since last refresh,
             // serve cached data immediately and let the daily cron handle the refresh.
             // This prevents 504 timeouts when users haven't visited in days.
-            const timeSinceRefresh = Math.min(
+            const timeSinceRefresh = Math.max(
                 now - scotusCache.fetchedAt,
                 now - appealsCache.fetchedAt,
                 now - districtCache.fetchedAt
@@ -568,8 +572,8 @@ export async function POST(request) {
         });
 
         // Step 7: Re-process any items whose summaries are missing from cache
-        if (missingIds.length > 0) {
-            console.log(`[Recovery] ${missingIds.length} items missing from cache, re-fetching...`);
+        if (missingIds.length > 0 && (Date.now() - now) < 45000) {
+            console.log(`[Recovery] ${missingIds.length} items missing from cache, re-fetching (${((Date.now() - now) / 1000).toFixed(0)}s elapsed)...`);
             try {
                 // Re-read court caches to get fresh metadata (old refs may be stale after refresh)
                 const [freshScotus, freshAppeals, freshDistrict] = await Promise.all([
