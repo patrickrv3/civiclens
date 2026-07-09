@@ -21,6 +21,7 @@ export default function CourtRulings() {
     const [courtFilter, setCourtFilter] = useState('all');
     const [sortBy, setSortBy] = useState('recent');
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+    const [showCourtInfo, setShowCourtInfo] = useState(false);
     const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
     const sentinelRef = useRef(null);
@@ -135,8 +136,58 @@ export default function CourtRulings() {
                             {f.label}
                         </button>
                     ))}
+                    <button
+                        onClick={() => setShowCourtInfo(prev => !prev)}
+                        title="About court rulings"
+                        style={{
+                            background: 'none', border: '1px solid var(--cl-border, #333)',
+                            borderRadius: '50%', width: '26px', height: '26px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: 'pointer', color: 'var(--cl-text-secondary, #999)',
+                            fontSize: '0.75rem', fontWeight: 600, fontStyle: 'italic',
+                            flexShrink: 0, marginLeft: '4px',
+                        }}
+                    >
+                        i
+                    </button>
                 </div>
             </div>
+
+            {showCourtInfo && (
+                <div
+                    onClick={() => setShowCourtInfo(false)}
+                    style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+                        zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        padding: '24px',
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            background: 'var(--cl-card-bg, #1a1a2e)', border: '1px solid var(--cl-border, #333)',
+                            borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '380px',
+                            boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
+                            fontSize: '0.85rem', lineHeight: 1.6, color: 'var(--cl-text-primary, #e0e0e0)',
+                        }}
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <strong style={{ fontSize: '1rem' }}>ℹ️ About Court Rulings</strong>
+                            <button onClick={() => setShowCourtInfo(false)} style={{ background: 'none', border: 'none', color: 'var(--cl-text-secondary, #999)', cursor: 'pointer', fontSize: '1.2rem', padding: '0 4px' }}>✕</button>
+                        </div>
+                        <p style={{ margin: '0 0 12px 0' }}>
+                            We display the most recent judicial opinions from the <strong>U.S. Supreme Court</strong>, <strong>Federal Circuit Courts of Appeals</strong>, and the <strong>D.C. District Court</strong>, covering rulings from the past 90 days.
+                        </p>
+                        <p style={{ margin: '0 0 12px 0' }}>
+                            We maintain a rolling cache of up to <strong>50 rulings per court</strong>, refreshed every 2 hours. Each ruling is summarized by AI to explain the decision in plain English.
+                        </p>
+                        <p style={{ margin: 0, color: 'var(--cl-text-secondary, #888)', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                            All summaries are AI-generated and may not capture every legal nuance. Tap any ruling to read the full opinion.
+                        </p>
+                    </div>
+                </div>
+            )}
 
             {/* Pro upsell banner — show for non-Pro web users */}
             {!canSeeAll && (
