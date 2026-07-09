@@ -447,18 +447,28 @@ export async function POST(request) {
         }
 
         // ── Step 2: Fetch fresh from OpenStates ──
+        // OpenStates caps per_page at 20, so fetch 3 pages in parallel to get ~60 bills
         console.log(`[state-feed] ${stateAbbr}: cache miss or expired, fetching from OpenStates...`);
 
-        const url = `https://v3.openstates.org/bills?jurisdiction=${stateName}&sort=updated_desc&per_page=${MAX_BILLS}&page=1&include=abstracts&apikey=${apiKey}`;
+        const makeUrl = (pg) => `https://v3.openstates.org/bills?jurisdiction=${stateName}&sort=updated_desc&per_page=20&page=${pg}&include=abstracts&apikey=${apiKey}`;
 
-        const response = await fetch(url, { signal: AbortSignal.timeout(12000) });
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`[state-feed] OpenStates API error:`, response.status, errorText);
+        const pageResults = await Promise.allSettled([
+            fetch(makeUrl(1), { signal: AbortSignal.timeout(12000) }).then(r => r.ok ? r.json() : Promise.reject(r.status)),
+            fetch(makeUrl(2), { signal: AbortSignal.timeout(12000) }).then(r => r.ok ? r.json() : Promise.reject(r.status)),
+            fetch(makeUrl(3), { signal: AbortSignal.timeout(12000) }).then(r => r.ok ? r.json() : Promise.reject(r.status)),
+        ]);
 
-            // If we have stale cache, serve it rather than error
+        const rawBills = [];
+        for (const result of pageResults) {
+            if (result.status === 'fulfilled' && result.value.results) {
+                rawBills.push(...result.value.results);
+            }
+        }
+
+        if (rawBills.length === 0) {
+            // All pages failed — try stale cache
             if (cached && cached.items && cached.items.length > 0) {
-                console.log(`[state-feed] ${stateAbbr}: API failed, falling back to stale cache`);
+                console.log(`[state-feed] ${stateAbbr}: all pages failed, falling back to stale cache`);
                 const start = (pageNum - 1) * itemsPerPage;
                 const pageItems = cached.items.slice(start, start + itemsPerPage);
                 return NextResponse.json({
@@ -470,13 +480,9 @@ export async function POST(request) {
                     totalItems: cached.items.length,
                 });
             }
-
-            throw new Error(`OpenStates API Error: ${response.status}`);
         }
 
-        const data = await response.json();
-        const rawBills = data.results || [];
-        console.log(`[state-feed] ${stateAbbr}: fetched ${rawBills.length} bills from OpenStates`);
+        console.log(`[state-feed] ${stateAbbr}: fetched ${rawBills.length} bills from OpenStates (${pageResults.filter(r => r.status === 'fulfilled').length}/3 pages)`);
 
         if (rawBills.length === 0) {
             return NextResponse.json({
