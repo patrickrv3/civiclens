@@ -70,7 +70,7 @@ export async function POST(request) {
         frParams.append('fields[]', 'executive_order_number');
         const frUrl = `https://www.federalregister.gov/api/v1/documents.json?${frParams.toString()}`;
 
-        const frRes = await fetch(frUrl);
+        const frRes = await fetch(frUrl, { signal: AbortSignal.timeout(12000) });
         if (!frRes.ok) {
             const errText = await frRes.text();
             console.error(`Federal Register API error: ${frRes.status} - ${errText.substring(0, 200)}`);

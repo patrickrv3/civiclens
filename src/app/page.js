@@ -64,19 +64,27 @@ export default function Home() {
           sortBy, // tell the API which mode so it uses correct batch size + ordering
         };
 
-        // Fetch bills and executive orders in parallel — EO fetch is fully isolated
+        // Fetch bills and executive orders in parallel — EO is non-blocking
+        // If EO takes > 5s, show federal bills immediately and merge EOs when ready
         const base = getApiBase();
-        const [feedRes, eoRes] = await Promise.all([
-          fetch(`${base}/api/feed`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          }),
-          fetch(`${base}/api/executive-orders`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          }).catch(() => null), // Network-level failure is non-fatal
+        const feedPromise = fetch(`${base}/api/feed`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const eoPromise = fetch(`${base}/api/executive-orders`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }).catch(() => null);
+
+        // Wait for federal feed — this is required
+        const feedRes = await feedPromise;
+
+        // Race EO against a 5-second timeout — don't block the page
+        const eoRes = await Promise.race([
+          eoPromise,
+          new Promise(resolve => setTimeout(() => resolve(null), 5000)),
         ]);
 
         // Safely parse feed response — Vercel sometimes returns HTML error pages
