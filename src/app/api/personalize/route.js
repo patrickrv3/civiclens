@@ -3,6 +3,8 @@ import OpenAI from 'openai';
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
+export const maxDuration = 60;
+
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY || '',
 });

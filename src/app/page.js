@@ -33,6 +33,7 @@ export default function Home() {
   const [isPersonalizing, setIsPersonalizing] = useState(false);
   const [error, setError] = useState(null);
   const [stateError, setStateError] = useState(null);
+  const [stateRetryCount, setStateRetryCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [nextOffset, setNextOffset] = useState(0);
   const [stateHasMore, setStateHasMore] = useState(false);
@@ -200,7 +201,14 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ zipCode: profile.location.zipCode, page: stateNextPage, perPage: 15 }),
       });
-      const data = await response.json();
+      let data;
+      try {
+        const text = await response.text();
+        data = JSON.parse(text);
+      } catch {
+        console.error('loadMoreState: response was not valid JSON');
+        return;
+      }
       if (!response.ok) return;
       // Append new items at end — scroll position preserved naturally
       setStateFeedItems(prev => [...prev, ...(data.items || [])]);
@@ -305,7 +313,7 @@ export default function Home() {
       }
     }
     fetchStateFeed();
-  }, [profile?.location?.zipCode]);
+  }, [profile?.location?.zipCode, stateRetryCount]);
 
   // (loadMoreState moved above IntersectionObserver — see above)
 
@@ -534,7 +542,7 @@ export default function Home() {
               <>
                 <p style={{ color: '#ef4444' }}>Failed to load state legislation.</p>
                 <p style={{ fontSize: '0.85em', color: '#999', marginTop: '8px' }}>{stateError}</p>
-                <button onClick={() => { setStateError(null); hasLoadedState.current = false; }} style={{ marginTop: '12px', padding: '8px 16px', borderRadius: '8px', background: 'var(--cl-primary-500)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '0.85rem' }}>Retry</button>
+                <button onClick={() => { setStateError(null); hasLoadedState.current = false; setStateRetryCount(c => c + 1); }} style={{ marginTop: '12px', padding: '8px 16px', borderRadius: '8px', background: 'var(--cl-primary-500)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '0.85rem' }}>Retry</button>
               </>
             ) : (
               <>

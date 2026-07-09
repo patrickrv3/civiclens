@@ -113,21 +113,27 @@ export async function POST(request) {
                 : '';
             const userPrompt = `Summarize these executive orders and generate tagImpacts for Life Tags: ${(lifeTags || []).join(', ') || 'None'}.${interestsText}\n\nOrders:\n${JSON.stringify(uncached, null, 2)}`;
 
-            const completion = await openai.chat.completions.create({
-                model: 'gpt-4o-mini',
-                messages: [
-                    { role: 'system', content: SYSTEM_PROMPT },
-                    { role: 'user', content: userPrompt },
-                ],
-                response_format: { type: 'json_object' },
-            });
+            try {
+                const completion = await openai.chat.completions.create({
+                    model: 'gpt-4o-mini',
+                    messages: [
+                        { role: 'system', content: SYSTEM_PROMPT },
+                        { role: 'user', content: userPrompt },
+                    ],
+                    response_format: { type: 'json_object' },
+                }, { signal: AbortSignal.timeout(30000) });
 
-            const parsed = JSON.parse(completion.choices[0].message.content);
-            aiItems = parsed.orders || [];
+                let parsed;
+                try {
+                    parsed = JSON.parse(completion.choices[0].message.content);
+                } catch (parseErr) {
+                    console.warn('[EO] Failed to parse AI response:', parseErr.message);
+                    parsed = { orders: [] };
+                }
+                aiItems = parsed.orders || [];
 
-            // Cache fire-and-forget
-            aiItems.forEach(item => {
-                if (item.id) {
+                // Await cache writes so they complete before function exits
+                await Promise.all(aiItems.filter(item => item.id).map(item =>
                     cacheSummary(item.id, {
                         id: item.id,
                         shortTitle: item.shortTitle,
@@ -143,9 +149,12 @@ export async function POST(request) {
                         locationMatches: [],
                         likes: 0,
                         dislikes: 0,
-                    });
-                }
-            });
+                    })
+                ));
+            } catch (aiErr) {
+                console.error('[EO] AI processing failed:', aiErr.message);
+                // Continue with cached items only
+            }
         }
 
         // Merge cached + AI results preserving order
