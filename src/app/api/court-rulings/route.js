@@ -408,10 +408,29 @@ export async function POST(request) {
         ]);
 
         const now = Date.now();
-        const needsRefresh = forceRefresh ||
+        let needsRefresh = forceRefresh ||
             (now - scotusCache.fetchedAt > REFRESH_INTERVAL_MS) ||
             (now - appealsCache.fetchedAt > REFRESH_INTERVAL_MS) ||
             (now - districtCache.fetchedAt > REFRESH_INTERVAL_MS);
+
+        const hasCachedData = scotusCache.ids.length > 0 || appealsCache.ids.length > 0 || districtCache.ids.length > 0;
+
+        if (needsRefresh) {
+            // If we have cached data and it's been a long time since last refresh,
+            // serve cached data immediately and let the daily cron handle the refresh.
+            // This prevents 504 timeouts when users haven't visited in days.
+            const timeSinceRefresh = Math.min(
+                now - scotusCache.fetchedAt,
+                now - appealsCache.fetchedAt,
+                now - districtCache.fetchedAt
+            );
+            const hoursStale = timeSinceRefresh / (60 * 60 * 1000);
+
+            if (hasCachedData && hoursStale > 24 && !forceRefresh) {
+                console.log(`[Cache] Stale by ${hoursStale.toFixed(0)}h but has cached data — serving stale, skipping heavy refresh`);
+                needsRefresh = false; // Skip refresh, serve what we have
+            }
+        }
 
         let allNewItems = []; // Items that need AI processing
 
@@ -443,6 +462,14 @@ export async function POST(request) {
                 allNewItems = allNewItems.slice(0, MAX_NEW_PER_REQUEST);
             }
 
+            // Time budget check — if we've already used 40+ seconds on CourtListener,
+            // skip AI enrichment and save the cache with just the IDs
+            const elapsed = Date.now() - now;
+            if (elapsed > 40000 && allNewItems.length > 5) {
+                console.warn(`[Budget] ${elapsed}ms elapsed, trimming AI work to 5 items`);
+                allNewItems = allNewItems.slice(0, 5);
+            }
+
             // Step 4: Enrich ALL new items with opinion text ONCE (sequential, rate-limit safe)
             const courtTypeMap = {};
             allNewItems.forEach(item => { courtTypeMap[item.id] = item.courtType; });
@@ -462,6 +489,11 @@ export async function POST(request) {
                 // Process AI batches SEQUENTIALLY to respect rate limits
                 const aiItems = [];
                 for (let i = 0; i < batches.length; i++) {
+                    // Time budget: stop AI if under 12 seconds remaining
+                    if (Date.now() - now > 48000) {
+                        console.warn(`[Budget] Stopping AI at batch ${i}/${batches.length}, ${Date.now() - now}ms elapsed`);
+                        break;
+                    }
                     try {
                         const r = await processWithAI(batches[i], lifeTags, interests);
                         console.log(`[AI] Batch ${i + 1}: sent ${batches[i].length}, got ${r.length}`);
