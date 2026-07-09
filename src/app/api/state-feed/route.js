@@ -1,6 +1,57 @@
 import { NextResponse } from 'next/server';
+import OpenAI from 'openai';
+import { initializeApp, getApps } from 'firebase/app';
+import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
-// Zip prefix → state abbreviation (same mapping used in representatives route)
+export const maxDuration = 60;
+
+// ── Firebase ──
+const firebaseConfig = {
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+};
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+const db = getFirestore(app);
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || '' });
+
+// ── Constants ──
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const STALE_SERVE_MS = 12 * 60 * 60 * 1000; // 12 hours — serve stale, skip refresh
+const SUMMARY_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days for individual AI summaries
+const MAX_BILLS = 50; // Max bills to cache per state
+const MAX_AI_PER_REQUEST = 15; // Max bills to AI-summarize in one request
+
+// ── AI Prompt ──
+const STATE_BILL_PROMPT = `You are an expert, neutral, nonpartisan civic analyst specializing in state legislation.
+Summarize each state bill. For the "generalSummary" field, explain the SPECIFIC policy change in 2 sentences max.
+NEVER write vague summaries like "addresses issues related to X" or "deals with matters concerning Y".
+Explain what the bill CREATES, FUNDS, BANS, REQUIRES, or CHANGES. Use plain English a normal person can understand.
+
+For "impactLevel", classify:
+- "High Impact": Bills affecting daily life — taxes, healthcare, housing, education, environment, policing, guns, immigration, water, insurance, rent.
+- "Moderate Impact": Bills affecting specific industries or groups — regulatory changes, agency funding, infrastructure.
+- "Low Impact": Symbolic — naming, designating, honoring, recognition, awareness.
+
+For "status", classify based on the latestAction:
+- "Introduced": Only if action says "introduced" or "read first time".
+- "In Committee": "referred to committee", "hearing scheduled", "ordered to be reported".
+- "Reported": "placed on calendar", "reported by committee".
+- "Passed House": "passed assembly", "passed house", "third reading".
+- "Passed Senate": "passed senate".
+- "Passed Both Chambers": Passed both chambers.
+- "Signed into Law": "signed", "chaptered", "enacted".
+- "Failed": "failed", "vetoed", "died in committee".
+Do NOT label a bill "Introduced" if it has progressed past introduction.
+
+Return ONLY valid JSON:
+{ "bills": [ { "id": "...", "shortTitle": "...", "generalSummary": "...", "impactLevel": "...", "status": "..." } ] }`;
+
+// ── Zip → State mapping ──
 const zipToState = {
     '005': 'NY', '006': 'PR', '007': 'PR', '008': 'VI', '009': 'PR',
     '010': 'MA', '011': 'MA', '012': 'MA', '013': 'MA', '014': 'MA',
@@ -225,41 +276,114 @@ function getStateFromZip(zipCode) {
     return zipToState[prefix] || null;
 }
 
-function classifyImpact(bill) {
-    const title = (bill.title || '').toLowerCase();
-    const highKeywords = ['tax', 'health', 'housing', 'education', 'minimum wage', 'gun', 'immigration', 'environment', 'abortion', 'police', 'criminal', 'water', 'insurance', 'rent', 'eviction'];
-    const lowKeywords = ['naming', 'designating', 'honoring', 'recognition', 'awareness', 'proclaim', 'relative to'];
+// ── Firestore cache helpers ──
 
-    for (const kw of highKeywords) {
-        if (title.includes(kw)) return 'High Impact';
-    }
-    for (const kw of lowKeywords) {
-        if (title.includes(kw)) return 'Low Impact';
-    }
-    return 'Moderate Impact';
+async function getStateFeedCache(stateAbbr) {
+    try {
+        const snap = await getDoc(doc(db, 'stateFeedCache', stateAbbr));
+        if (!snap.exists()) return null;
+        return snap.data();
+    } catch { return null; }
 }
 
-function mapStatus(actionText) {
-    const lower = (actionText || '').toLowerCase();
-    if (lower.includes('signed') || lower.includes('chaptered') || lower.includes('enacted')) return 'Signed into Law';
-    if (lower.includes('passed') && lower.includes('senate') && lower.includes('assembly')) return 'Passed Both Chambers';
-    if (lower.includes('passed senate') || lower.includes('passed in senate')) return 'Passed Senate';
-    if (lower.includes('passed assembly') || lower.includes('passed house') || lower.includes('ayes')) return 'Passed House';
-    if (lower.includes('committee') || lower.includes('referred')) return 'In Committee';
-    if (lower.includes('introduced') || lower.includes('read first time')) return 'Introduced';
-    return 'Introduced';
+async function saveStateFeedCache(stateAbbr, items, stateName) {
+    try {
+        await setDoc(doc(db, 'stateFeedCache', stateAbbr), {
+            items: items.slice(0, MAX_BILLS),
+            stateName,
+            cachedAt: Date.now(),
+        });
+    } catch (e) {
+        console.warn(`[state-feed] Cache save failed (${stateAbbr}):`, e.message);
+    }
 }
 
-// Trim OpenStates abstracts to max 2 sentences or 280 chars
-function condenseSummary(text) {
-    if (!text) return '';
-    const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
-    if (sentences.length <= 2) {
-        return text.trim().slice(0, 320);
-    }
-    const twoSentences = sentences.slice(0, 2).join(' ').trim();
-    return twoSentences.length > 320 ? twoSentences.slice(0, 317) + '...' : twoSentences;
+async function getCachedSummary(id) {
+    try {
+        const snap = await getDoc(doc(db, 'billSummaries', id));
+        if (!snap.exists()) return null;
+        const data = snap.data();
+        if (Date.now() - (data.cachedAt || 0) > SUMMARY_CACHE_TTL_MS) return null;
+        return data;
+    } catch { return null; }
 }
+
+async function cacheSummary(id, data) {
+    try { await setDoc(doc(db, 'billSummaries', id), { ...data, cachedAt: Date.now() }); }
+    catch (e) { console.warn('[state-feed] Summary cache write failed:', e.message); }
+}
+
+// ── AI summarization ──
+
+async function summarizeWithAI(bills, stateAbbr, stateName) {
+    if (bills.length === 0) return [];
+
+    const startTime = Date.now();
+    const billTexts = bills.map(b =>
+        `ID: ${b.id}\nTitle: ${b.originalTitle}\nState: ${stateName}\nLatest Action: ${b.latestAction}\nDate: ${b.date}\nAbstract: ${b.fullSummary || 'None'}`
+    ).join('\n---\n');
+
+    try {
+        const completion = await openai.chat.completions.create({
+            model: 'gpt-4o-mini',
+            temperature: 0.3,
+            max_tokens: 3000,
+            messages: [
+                { role: 'system', content: STATE_BILL_PROMPT },
+                { role: 'user', content: `Summarize these ${stateName} state bills:\n\n${billTexts}` },
+            ],
+        });
+
+        let parsed;
+        try {
+            const raw = completion.choices[0].message.content
+                .replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+            parsed = JSON.parse(raw);
+        } catch (parseErr) {
+            console.warn('[state-feed] AI response parse failed:', parseErr.message);
+            return [];
+        }
+
+        const aiResults = parsed.bills || [];
+        console.log(`[state-feed] AI summarized ${aiResults.length}/${bills.length} bills in ${Date.now() - startTime}ms`);
+        return aiResults;
+    } catch (e) {
+        console.error('[state-feed] AI call failed:', e.message);
+        return [];
+    }
+}
+
+// ── Transform OpenStates bill to FeedCard format ──
+
+function transformBill(bill, stateAbbr, stateName) {
+    const abstract = bill.abstracts && bill.abstracts.length > 0 ? bill.abstracts[0].abstract : '';
+    return {
+        id: `state-${stateAbbr}-${bill.identifier}`,
+        shortTitle: bill.title.length > 60 ? bill.title.substring(0, 57) + '...' : bill.title,
+        originalTitle: bill.title,
+        url: bill.openstates_url || '',
+        type: 'Bill',
+        level: 'State',
+        state: stateAbbr,
+        stateName: stateName,
+        date: bill.latest_action_date || bill.first_action_date || '',
+        latestActionDate: bill.latest_action_date || bill.first_action_date || '',
+        generalSummary: '', // Will be filled by AI
+        fullSummary: abstract || '',
+        impactLevel: 'Moderate Impact', // Will be overridden by AI
+        status: 'Introduced', // Will be overridden by AI
+        latestAction: bill.latest_action_description || '',
+        tagImpacts: {},
+        sponsors: [],
+        locationMatches: [stateAbbr],
+        likes: 0,
+        dislikes: 0,
+        subjects: bill.subject || [],
+        billIdentifier: bill.identifier,
+    };
+}
+
+// ── Main handler ──
 
 export async function POST(request) {
     try {
@@ -282,68 +406,163 @@ export async function POST(request) {
         }
 
         const pageNum = page || 1;
-        const itemsPerPage = perPage || 10;
+        const itemsPerPage = perPage || 15;
 
-        // Fetch recent bills from OpenStates, sorted by most recently updated
-        // Only include bills (not resolutions) for the current session, and include abstracts
-        const url = `https://v3.openstates.org/bills?jurisdiction=${stateName}&sort=updated_desc&per_page=${itemsPerPage}&page=${pageNum}&include=abstracts&apikey=${apiKey}`;
+        // ── Step 1: Check Firestore cache ──
+        const cached = await getStateFeedCache(stateAbbr);
+        const now = Date.now();
 
-        const response = await fetch(url);
+        if (cached && cached.items && cached.items.length > 0) {
+            const age = now - (cached.cachedAt || 0);
+
+            if (age < CACHE_TTL_MS) {
+                // Fresh cache — serve immediately
+                console.log(`[state-feed] ${stateAbbr}: serving from fresh cache (${(age / 60000).toFixed(0)}min old, ${cached.items.length} items)`);
+                const start = (pageNum - 1) * itemsPerPage;
+                const pageItems = cached.items.slice(start, start + itemsPerPage);
+                return NextResponse.json({
+                    items: pageItems,
+                    hasMore: start + itemsPerPage < cached.items.length,
+                    nextPage: pageNum + 1,
+                    state: stateAbbr,
+                    stateName,
+                    totalItems: cached.items.length,
+                });
+            }
+
+            if (age < STALE_SERVE_MS) {
+                // Stale but usable — serve stale, don't block on refresh
+                console.log(`[state-feed] ${stateAbbr}: serving stale cache (${(age / 3600000).toFixed(1)}h old), refresh deferred`);
+                const start = (pageNum - 1) * itemsPerPage;
+                const pageItems = cached.items.slice(start, start + itemsPerPage);
+                return NextResponse.json({
+                    items: pageItems,
+                    hasMore: start + itemsPerPage < cached.items.length,
+                    nextPage: pageNum + 1,
+                    state: stateAbbr,
+                    stateName,
+                    totalItems: cached.items.length,
+                });
+            }
+        }
+
+        // ── Step 2: Fetch fresh from OpenStates ──
+        console.log(`[state-feed] ${stateAbbr}: cache miss or expired, fetching from OpenStates...`);
+
+        const url = `https://v3.openstates.org/bills?jurisdiction=${stateName}&sort=updated_desc&per_page=${MAX_BILLS}&page=1&include=abstracts&apikey=${apiKey}`;
+
+        const response = await fetch(url, { signal: AbortSignal.timeout(12000) });
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('OpenStates API error:', response.status, errorText);
+            console.error(`[state-feed] OpenStates API error:`, response.status, errorText);
+
+            // If we have stale cache, serve it rather than error
+            if (cached && cached.items && cached.items.length > 0) {
+                console.log(`[state-feed] ${stateAbbr}: API failed, falling back to stale cache`);
+                const start = (pageNum - 1) * itemsPerPage;
+                const pageItems = cached.items.slice(start, start + itemsPerPage);
+                return NextResponse.json({
+                    items: pageItems,
+                    hasMore: start + itemsPerPage < cached.items.length,
+                    nextPage: pageNum + 1,
+                    state: stateAbbr,
+                    stateName,
+                    totalItems: cached.items.length,
+                });
+            }
+
             throw new Error(`OpenStates API Error: ${response.status}`);
         }
 
         const data = await response.json();
-        const bills = data.results || [];
-        const pagination = data.pagination || {};
+        const rawBills = data.results || [];
+        console.log(`[state-feed] ${stateAbbr}: fetched ${rawBills.length} bills from OpenStates`);
 
-        // Transform bills into our FeedCard format
-        const items = bills.map((bill) => {
-            const abstract = bill.abstracts && bill.abstracts.length > 0 ? bill.abstracts[0].abstract : '';
-            const shortTitle = bill.title.length > 60
-                ? bill.title.substring(0, 57) + '...'
-                : bill.title;
-
-            return {
-                id: `state-${stateAbbr}-${bill.identifier}`,
-                shortTitle: shortTitle,
-                originalTitle: bill.title,
-                url: bill.openstates_url || '',
-                type: 'Bill',
-                level: 'State',
+        if (rawBills.length === 0) {
+            return NextResponse.json({
+                items: [],
+                hasMore: false,
+                nextPage: 1,
                 state: stateAbbr,
-                stateName: stateName,
-                date: bill.latest_action_date || bill.first_action_date || '',
-                generalSummary: condenseSummary(abstract) || `${bill.title} — a ${stateName} state bill currently in the legislature.`,
-                fullSummary: abstract || '',
-                impactLevel: classifyImpact(bill),
-                status: mapStatus(bill.latest_action_description),
-                latestAction: bill.latest_action_description || '',
-                tagImpacts: {},
-                sponsors: [],
-                locationMatches: [stateAbbr],
-                likes: 0,
-                dislikes: 0,
-                subjects: bill.subject || [],
-                billIdentifier: bill.identifier,
-            };
+                stateName,
+                totalItems: 0,
+            });
+        }
+
+        // ── Step 3: Transform bills ──
+        const items = rawBills.map(bill => transformBill(bill, stateAbbr, stateName));
+
+        // ── Step 4: Check for existing AI summaries ──
+        const summaryLookups = await Promise.all(items.map(item => getCachedSummary(item.id)));
+
+        const needsAI = [];
+        items.forEach((item, i) => {
+            if (summaryLookups[i]) {
+                // Use cached AI summary
+                item.generalSummary = summaryLookups[i].generalSummary || item.generalSummary;
+                item.impactLevel = summaryLookups[i].impactLevel || item.impactLevel;
+                item.status = summaryLookups[i].status || item.status;
+                item.shortTitle = summaryLookups[i].shortTitle || item.shortTitle;
+            } else {
+                needsAI.push(item);
+            }
         });
 
-        const hasMore = pageNum < (pagination.max_page || 1);
+        console.log(`[state-feed] ${stateAbbr}: ${items.length - needsAI.length} cached, ${needsAI.length} need AI`);
+
+        // ── Step 5: AI-summarize uncached bills ──
+        if (needsAI.length > 0) {
+            const toProcess = needsAI.slice(0, MAX_AI_PER_REQUEST);
+            const aiResults = await summarizeWithAI(toProcess, stateAbbr, stateName);
+
+            // Match AI results back to items and cache them
+            const aiMap = {};
+            aiResults.forEach(r => { if (r.id) aiMap[r.id] = r; });
+
+            await Promise.all(toProcess.map(item => {
+                const ai = aiMap[item.id];
+                if (ai) {
+                    item.generalSummary = ai.generalSummary || item.fullSummary || `${item.originalTitle} — a ${stateName} state bill.`;
+                    item.impactLevel = ai.impactLevel || item.impactLevel;
+                    item.status = ai.status || item.status;
+                    item.shortTitle = ai.shortTitle || item.shortTitle;
+                    return cacheSummary(item.id, {
+                        generalSummary: item.generalSummary,
+                        impactLevel: item.impactLevel,
+                        status: item.status,
+                        shortTitle: item.shortTitle,
+                    });
+                } else {
+                    // AI didn't return this bill — use fallback
+                    item.generalSummary = item.fullSummary || `${item.originalTitle} — a ${stateName} state bill.`;
+                    return Promise.resolve();
+                }
+            }));
+
+            // Any bills beyond the cap — give them fallback summaries
+            needsAI.slice(MAX_AI_PER_REQUEST).forEach(item => {
+                item.generalSummary = item.fullSummary || `${item.originalTitle} — a ${stateName} state bill.`;
+            });
+        }
+
+        // ── Step 6: Cache the full index ──
+        await saveStateFeedCache(stateAbbr, items, stateName);
+
+        // ── Step 7: Paginate and return ──
+        const start = (pageNum - 1) * itemsPerPage;
+        const pageItems = items.slice(start, start + itemsPerPage);
 
         return NextResponse.json({
-            items,
-            hasMore,
+            items: pageItems,
+            hasMore: start + itemsPerPage < items.length,
             nextPage: pageNum + 1,
             state: stateAbbr,
             stateName,
-            totalItems: pagination.total_items || 0,
+            totalItems: items.length,
         });
 
     } catch (error) {
-        console.error('State feed API error:', error);
+        console.error('[state-feed] Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

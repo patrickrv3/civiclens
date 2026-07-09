@@ -35,6 +35,13 @@ service cloud.firestore {
       allow write: if true;
     }
 
+    // ── State feed cache (per-state bill index) ────────────────────────────
+    // Open read/write — populated by state-feed route, read by same.
+    match /stateFeedCache/{docId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
     // ── Cron health logs ─────────────────────────────────────────────────────
     // Open read/write — server routes log cron job results here.
     match /cronHealth/{docId} {

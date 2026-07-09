@@ -32,6 +32,7 @@ export default function Home() {
   const [isLoadingMoreState, setIsLoadingMoreState] = useState(false);
   const [isPersonalizing, setIsPersonalizing] = useState(false);
   const [error, setError] = useState(null);
+  const [stateError, setStateError] = useState(null);
   const [hasMore, setHasMore] = useState(false);
   const [nextOffset, setNextOffset] = useState(0);
   const [stateHasMore, setStateHasMore] = useState(false);
@@ -290,6 +291,7 @@ export default function Home() {
         hasLoadedState.current = true;
       } catch (err) {
         console.warn('State feed error:', err);
+        setStateError(err.message || 'Failed to load state legislation');
       } finally {
         setIsLoadingState(false);
       }
@@ -520,9 +522,19 @@ export default function Home() {
           </div>
         ) : (
           <div style={{ textAlign: 'center', padding: '40px 0', color: '#666' }}>
-            <p>No civic updates found for this filter.</p>
-            {activeTab === 'State & Local' && !profile?.location?.zipCode && (
-              <p style={{ fontSize: '0.85em', color: '#999', marginTop: '8px' }}>Add your zip code in Settings to see state legislation.</p>
+            {activeTab === 'State & Local' && stateError ? (
+              <>
+                <p style={{ color: '#ef4444' }}>Failed to load state legislation.</p>
+                <p style={{ fontSize: '0.85em', color: '#999', marginTop: '8px' }}>{stateError}</p>
+                <button onClick={() => { setStateError(null); hasLoadedState.current = false; }} style={{ marginTop: '12px', padding: '8px 16px', borderRadius: '8px', background: 'var(--cl-primary-500)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '0.85rem' }}>Retry</button>
+              </>
+            ) : (
+              <>
+                <p>No civic updates found for this filter.</p>
+                {activeTab === 'State & Local' && !profile?.location?.zipCode && (
+                  <p style={{ fontSize: '0.85em', color: '#999', marginTop: '8px' }}>Add your zip code in Settings to see state legislation.</p>
+                )}
+              </>
             )}
           </div>
         )}
