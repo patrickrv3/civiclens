@@ -234,3 +234,11 @@ img {
   bottom: 0;
   background-color: var(--cl-gray-50, #f5f6f8);
 }
+
+/* On iOS, 100vh is taller than the visible viewport.
+   Use 100% of the fixed body instead, and stretch to fill with dvh fallback. */
+.capacitor-native body > div,
+.capacitor-native body > div > div {
+  height: 100% !important;
+  max-height: 100dvh;
+}
