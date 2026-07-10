@@ -562,6 +562,10 @@
         padding: 14px;
     }
 
+    :global(.capacitor-native) .content {
+        padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    }
+
     .statsRow {
         grid-template-columns: 1fr;
     }
