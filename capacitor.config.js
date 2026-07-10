@@ -31,6 +31,7 @@ const config = {
   ios: {
     scheme: 'Civisly',
     contentInset: 'never',
+    backgroundColor: '#f5f6f8',
   },
 };
 

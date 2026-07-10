@@ -222,9 +222,16 @@ img {
 /* --- Capacitor Native: Lock outer scroll ---
    Prevents WKWebView's native scroll view from scrolling.
    Only the inner .content div should scroll. */
-.capacitor-native,
+.capacitor-native {
+  height: 100%;
+  height: -webkit-fill-available;
+  overflow: hidden;
+  background-color: var(--cl-gray-50, #f5f6f8);
+}
+
 .capacitor-native body {
   height: 100%;
+  height: -webkit-fill-available;
   overflow: hidden;
   position: fixed;
   width: 100%;
@@ -233,12 +240,11 @@ img {
   right: 0;
   bottom: 0;
   background-color: var(--cl-gray-50, #f5f6f8);
+  overscroll-behavior: none;
 }
 
-/* On iOS, 100vh is taller than the visible viewport.
-   Use 100% of the fixed body instead, and stretch to fill with dvh fallback. */
-.capacitor-native body > div,
-.capacitor-native body > div > div {
+/* Shell must fill the fixed body, not use 100vh (which is wrong on iOS) */
+.capacitor-native body > div {
   height: 100% !important;
-  max-height: 100dvh;
+  height: -webkit-fill-available !important;
 }
