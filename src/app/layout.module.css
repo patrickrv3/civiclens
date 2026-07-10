@@ -39,7 +39,7 @@
     }
 
     :global(.capacitor-native) .sidebarHeader {
-        padding-top: 60px;
+        padding-top: var(--cl-space-5);
     }
 }
 
@@ -549,7 +549,7 @@
     }
 
     :global(.capacitor-native) .topBar {
-        padding-top: 59px;
+        padding-top: var(--cl-space-3);
     }
 
     .searchBar {
