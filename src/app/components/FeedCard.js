@@ -59,10 +59,6 @@ export default function FeedCard({ item, profile }) {
     const watching = isWatching(item.id);
 
     const handleWatch = async () => {
-        if (!user) {
-            window.dispatchEvent(new CustomEvent('civiclens:openAuth'));
-            return;
-        }
         const native = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
         if (!native && !isPro) {
             setShowUpgrade(true);

@@ -531,65 +531,9 @@ export default function Home() {
           </div>
         ) : filteredItems.length > 0 ? (
           <div className={styles.feedList}>
-            {(user ? filteredItems : filteredItems.slice(0, 10)).map(item => (
+            {filteredItems.map(item => (
               <FeedCard key={item.id} item={item} profile={profile} />
             ))}
-
-            {/* Paywall — show after 10 cards for logged-out users */}
-            {!user && filteredItems.length > 0 && (
-              <div style={{
-                position: 'relative',
-                marginTop: '8px',
-                borderRadius: '16px',
-                overflow: 'hidden',
-                boxShadow: '0 4px 24px rgba(99,102,241,0.10)',
-              }}>
-                {/* Blurred ghost card */}
-                <div style={{
-                  filter: 'blur(5px)',
-                  opacity: 0.45,
-                  pointerEvents: 'none',
-                  userSelect: 'none',
-                  padding: '24px',
-                  background: '#fff',
-                  borderRadius: '16px',
-                  border: '1px solid #e5e7eb',
-                }}>
-                  <div style={{ height: '12px', background: '#e5e7eb', borderRadius: '8px', width: '60%', marginBottom: '12px' }} />
-                  <div style={{ height: '10px', background: '#f3f4f6', borderRadius: '8px', width: '85%', marginBottom: '8px' }} />
-                  <div style={{ height: '10px', background: '#f3f4f6', borderRadius: '8px', width: '70%', marginBottom: '8px' }} />
-                  <div style={{ height: '10px', background: '#f3f4f6', borderRadius: '8px', width: '50%' }} />
-                </div>
-
-                {/* CTA overlay */}
-                <div style={{
-                  position: 'absolute', inset: 0,
-                  display: 'flex', flexDirection: 'column',
-                  alignItems: 'center', justifyContent: 'center',
-                  background: 'linear-gradient(to bottom, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.97) 40%)',
-                  padding: '32px 24px', textAlign: 'center',
-                }}>
-                  <div style={{ fontSize: '1.5rem', marginBottom: '8px' }}>🔒</div>
-                  <div style={{ fontWeight: 700, fontSize: '1.05rem', color: '#1e1b4b', marginBottom: '6px' }}>You&apos;ve reached the preview limit</div>
-                  <div style={{ color: '#6b7280', fontSize: '0.88rem', marginBottom: '20px', maxWidth: '300px' }}>
-                    Sign up for free to unlock unlimited legislation updates, personalized alerts, and your civic dashboard.
-                  </div>
-                  <button
-                    onClick={() => window.dispatchEvent(new CustomEvent('civiclens:openAuth'))}
-                    style={{
-                      padding: '11px 28px', borderRadius: '12px',
-                      background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                      color: '#fff', fontWeight: 700, fontSize: '0.9rem',
-                      border: 'none', cursor: 'pointer',
-                      boxShadow: '0 4px 12px rgba(99,102,241,0.35)',
-                      transition: 'all 0.2s',
-                    }}
-                  >
-                    Sign Up Free →
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         ) : (
           <div style={{ textAlign: 'center', padding: '40px 0', color: '#666' }}>

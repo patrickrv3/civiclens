@@ -10,6 +10,8 @@ import Elections from './Elections';
 import CourtRulings from './CourtRulings';
 import Settings from './Settings';
 import AuthModal from './AuthModal';
+import AuthScreen from './AuthScreen';
+import authScreenStyles from './AuthScreen.module.css';
 import NotificationPanel from './NotificationPanel';
 import { useAuth } from '../context/AuthContext';
 import { useWatchedBills } from '../context/WatchedBillsContext';
@@ -114,7 +116,7 @@ const secondaryNavItems = [
 
 export default function AppShell({ children }) {
     const { profile, getPrimaryLocation } = useProfile();
-    const { user, logOut } = useAuth();
+    const { user, loading, logOut } = useAuth();
     const { unreadCount } = useWatchedBills();
     const { isPro } = useSubscription();
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -183,6 +185,27 @@ export default function AppShell({ children }) {
 
     const locationText = getPrimaryLocation() || 'Add your location →';
     const profileName = profile.hasCompletedOnboarding ? 'Your Profile' : 'Set up profile';
+
+    // --- Auth Gate: show loading or auth screen when not signed in ---
+    if (loading) {
+        return (
+            <div className={authScreenStyles.loadingScreen}>
+                <div className={authScreenStyles.spinner} />
+            </div>
+        );
+    }
+
+    if (!user) {
+        return (
+            <AuthScreen
+                onSignUp={() => {
+                    if (!profile.hasCompletedOnboarding) {
+                        setTimeout(() => setModalOpen(true), 400);
+                    }
+                }}
+            />
+        );
+    }
 
     return (
         <AskAIContext.Provider value={handleAskAI}>
