@@ -30,7 +30,7 @@ const config = {
   },
   ios: {
     scheme: 'Civisly',
-    contentInset: 'automatic',
+    contentInset: 'never',
   },
 };
 

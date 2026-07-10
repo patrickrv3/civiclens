@@ -39,7 +39,7 @@
     }
 
     :global(.capacitor-native) .sidebarHeader {
-        padding-top: var(--cl-space-5);
+        padding-top: calc(var(--cl-space-5) + env(safe-area-inset-top, 0px));
     }
 }
 
@@ -549,7 +549,9 @@
     }
 
     :global(.capacitor-native) .topBar {
-        padding-top: var(--cl-space-3);
+        padding-top: calc(var(--cl-space-3) + env(safe-area-inset-top, 0px));
+        position: sticky;
+        top: 0;
     }
 
     .searchBar {
