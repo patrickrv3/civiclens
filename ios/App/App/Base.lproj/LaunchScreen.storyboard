@@ -16,10 +16,10 @@
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="Splash" translatesAutoresizingMaskIntoConstraints="NO" id="splashImage">
-                                <rect key="frame" x="97.5" y="243.5" width="180" height="180"/>
+                                <rect key="frame" x="77.5" y="223.5" width="220" height="220"/>
                                 <constraints>
-                                    <constraint firstAttribute="width" constant="180" id="widthConstraint"/>
-                                    <constraint firstAttribute="height" constant="180" id="heightConstraint"/>
+                                    <constraint firstAttribute="width" constant="220" id="widthConstraint"/>
+                                    <constraint firstAttribute="height" constant="220" id="heightConstraint"/>
                                 </constraints>
                             </imageView>
                         </subviews>
