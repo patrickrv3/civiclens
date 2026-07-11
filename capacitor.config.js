@@ -20,7 +20,7 @@ const config = {
   plugins: {
     SplashScreen: {
       launchShowDuration: 2000,
-      backgroundColor: '#6366f1',
+      backgroundColor: '#ffffff',
       showSpinner: false,
     },
     StatusBar: {
