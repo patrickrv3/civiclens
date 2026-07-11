@@ -3,14 +3,14 @@
    Clean, minimal, neutral — Notion/Linear/Stripe vibes
    =================================================== */
 
+/* --- Google Font Import --- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 /* --- Force Light Mode (prevents iOS dark mode from darkening safe areas) --- */
 html {
   color-scheme: light only;
   background-color: #f5f6f8;
 }
-
-/* --- Google Font Import --- */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 /* --- Design Tokens --- */
 :root {
