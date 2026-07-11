@@ -230,52 +230,18 @@ img {
    Only the inner .content div should scroll. */
 .capacitor-native {
   height: 100%;
-  height: -webkit-fill-available;
   overflow: hidden;
-  background-color: var(--cl-gray-50, #f5f6f8);
+  background-color: #ffffff;
 }
 
 .capacitor-native body {
   height: 100%;
-  height: -webkit-fill-available;
   overflow: hidden;
-  position: fixed;
-  width: 100%;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--cl-gray-50, #f5f6f8);
+  background-color: #ffffff;
   overscroll-behavior: none;
 }
 
-/* Shell must fill the fixed body, not use 100vh (which is wrong on iOS) */
+/* Shell must fill the body */
 .capacitor-native body > div {
   height: 100% !important;
-  height: -webkit-fill-available !important;
-}
-
-/* --- Safe area overlays: cover native WKWebView dark mode background --- */
-.capacitor-native::before,
-.capacitor-native::after {
-  content: '';
-  position: fixed;
-  left: 0;
-  right: 0;
-  z-index: 999999;
-  pointer-events: none;
-}
-
-/* Top overlay — white to match the top bar */
-.capacitor-native::before {
-  top: 0;
-  height: env(safe-area-inset-top, 0px);
-  background: #ffffff;
-}
-
-/* Bottom overlay — gray to match the content background */
-.capacitor-native::after {
-  bottom: 0;
-  height: env(safe-area-inset-bottom, 0px);
-  background: #f5f6f8;
 }
