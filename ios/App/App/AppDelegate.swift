@@ -7,7 +7,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // Force light mode — app doesn't support dark mode
+        if let window = self.window {
+            window.overrideUserInterfaceStyle = .light
+            window.backgroundColor = UIColor(red: 245/255, green: 246/255, blue: 248/255, alpha: 1.0)
+        }
         return true
     }
 
