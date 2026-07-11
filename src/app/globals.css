@@ -254,3 +254,28 @@ img {
   height: 100% !important;
   height: -webkit-fill-available !important;
 }
+
+/* --- Safe area overlays: cover native WKWebView dark mode background --- */
+.capacitor-native::before,
+.capacitor-native::after {
+  content: '';
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 999999;
+  pointer-events: none;
+}
+
+/* Top overlay — white to match the top bar */
+.capacitor-native::before {
+  top: 0;
+  height: env(safe-area-inset-top, 0px);
+  background: #ffffff;
+}
+
+/* Bottom overlay — gray to match the content background */
+.capacitor-native::after {
+  bottom: 0;
+  height: env(safe-area-inset-bottom, 0px);
+  background: #f5f6f8;
+}
