@@ -611,11 +611,17 @@ export async function POST(request) {
                     }));
 
                 if (missingItems.length > 0) {
-                    console.log(`[Recovery] Found ${missingItems.length} items with stored metadata (no CourtListener needed)`);
+                    // Cap recovery to avoid timeout — process a few per request
+                    const MAX_RECOVERY = 5;
+                    const recoveryBatch = missingItems.slice(0, MAX_RECOVERY);
+                    if (missingItems.length > MAX_RECOVERY) {
+                        console.log(`[Recovery] ${missingItems.length} items need recovery, processing ${MAX_RECOVERY} now, ${missingItems.length - MAX_RECOVERY} deferred`);
+                    }
+                    console.log(`[Recovery] Found ${recoveryBatch.length} items with stored metadata (no CourtListener needed)`);
                     const courtTypeMap = {};
-                    missingItems.forEach(item => { courtTypeMap[item.id] = item.courtType; });
+                    recoveryBatch.forEach(item => { courtTypeMap[item.id] = item.courtType; });
 
-                    const enrichedMissing = await enrichWithOpinionText(missingItems);
+                    const enrichedMissing = await enrichWithOpinionText(recoveryBatch);
                     const recovered = await processWithAI(enrichedMissing, lifeTags, interests)
                         .catch(e => { console.error('[Recovery] AI failed:', e.message); return []; });
 
