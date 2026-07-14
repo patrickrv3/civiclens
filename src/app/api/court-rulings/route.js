@@ -430,7 +430,7 @@ export async function POST(request) {
             );
             const hoursStale = timeSinceRefresh / (60 * 60 * 1000);
 
-            if (hasCachedData && hoursStale > 24 && !forceRefresh) {
+            if (hasCachedData && hoursStale > 4 && !forceRefresh) {
                 console.log(`[Cache] Stale by ${hoursStale.toFixed(0)}h but has cached data — serving stale, skipping heavy refresh`);
                 needsRefresh = false; // Skip refresh, serve what we have
             }
@@ -458,6 +458,17 @@ export async function POST(request) {
                 ...appealsMerge.newItems,
                 ...districtMerge.newItems,
             ];
+
+            // ── SAVE CACHE INDEX IMMEDIATELY ──────────────────────────────────
+            // Save the merged ID lists NOW, before slow enrichment/AI processing.
+            // This ensures if we timeout, the cache still has the latest IDs and
+            // the next request won't restart from scratch.
+            await Promise.all([
+                saveCourtCache('scotus', scotusMerge.mergedIds, latest.scotus),
+                saveCourtCache('federal_appeals', appealsMerge.mergedIds, latest.appeals),
+                saveCourtCache('district', districtMerge.mergedIds, latest.district),
+            ]);
+            console.log('[Cache] Saved cache index with latest IDs before enrichment');
 
             // Cap new items per request to avoid overwhelming OpenAI / timing out
             const MAX_NEW_PER_REQUEST = 15;
@@ -522,13 +533,6 @@ export async function POST(request) {
                     return Promise.resolve();
                 }));
             }
-
-            // Step 5: Save updated per-court caches (with metadata for recovery)
-            await Promise.all([
-                saveCourtCache('scotus', scotusMerge.mergedIds, latest.scotus),
-                saveCourtCache('federal_appeals', appealsMerge.mergedIds, latest.appeals),
-                saveCourtCache('district', districtMerge.mergedIds, latest.district),
-            ]);
         } else {
             console.log('[Cache] All courts fresh, serving from cache');
         }
