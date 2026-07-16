@@ -5,6 +5,7 @@ import styles from './Settings.module.css';
 import { useProfile } from '../context/ProfileContext';
 import { useAuth } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
+import { usePushNotifications } from '../context/PushNotificationContext';
 
 const LIFE_TAGS = [
     'Homeowner', 'Renter', 'Student', 'Parent', 'Veteran',
@@ -23,6 +24,7 @@ export default function Settings() {
     const { profile, updateProfile } = useProfile();
     const { user, logOut } = useAuth();
     const { isPro, subscription, startCheckout, openPortal } = useSubscription();
+    const { requestPermission, isPushEnabled, isNative, permissionStatus } = usePushNotifications();
     const [zip, setZip] = useState(profile.location?.zipCode || '');
     const [showSaved, setShowSaved] = useState(false);
     const saveTimeout = useRef(null);
@@ -162,6 +164,64 @@ export default function Settings() {
                     </div>
                 </div>
             </div>
+
+            {/* Notifications — only show on native iOS */}
+            {isNative && (
+            <div className={styles.section}>
+                <div className={styles.sectionTitle}>🔔 Notifications</div>
+                <div className={styles.card}>
+                    {!isPushEnabled && (
+                        <div style={{ padding: '12px 16px', marginBottom: '8px' }}>
+                            <button
+                                onClick={requestPermission}
+                                style={{
+                                    width: '100%', padding: '12px', borderRadius: '10px',
+                                    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                                    color: '#fff', border: 'none', fontSize: '14px',
+                                    fontWeight: 600, cursor: 'pointer',
+                                }}
+                            >
+                                {permissionStatus === 'denied' ? 'Enable in iOS Settings' : '🔔 Enable Push Notifications'}
+                            </button>
+                        </div>
+                    )}
+                    <div className={styles.toggleRow}>
+                        <div className={styles.toggleInfo}>
+                            <div className={styles.toggleLabel}>Watched Bill Alerts</div>
+                            <div className={styles.toggleDesc}>
+                                Get notified when bills you&apos;re watching change status.
+                            </div>
+                        </div>
+                        <button
+                            className={`${styles.toggle} ${(profile.notificationPreferences?.watchedBills !== false) ? styles.toggleOn : ''}`}
+                            onClick={() => updateProfile({
+                                notificationPreferences: {
+                                    ...profile.notificationPreferences,
+                                    watchedBills: !(profile.notificationPreferences?.watchedBills !== false),
+                                }
+                            })}
+                        />
+                    </div>
+                    <div className={styles.toggleRow}>
+                        <div className={styles.toggleInfo}>
+                            <div className={styles.toggleLabel}>General Alerts</div>
+                            <div className={styles.toggleDesc}>
+                                New Supreme Court rulings, major bills, and executive orders.
+                            </div>
+                        </div>
+                        <button
+                            className={`${styles.toggle} ${(profile.notificationPreferences?.general !== false) ? styles.toggleOn : ''}`}
+                            onClick={() => updateProfile({
+                                notificationPreferences: {
+                                    ...profile.notificationPreferences,
+                                    general: !(profile.notificationPreferences?.general !== false),
+                                }
+                            })}
+                        />
+                    </div>
+                </div>
+            </div>
+            )}
 
             {/* Subscription — hidden in iOS app until Apple IAP is implemented */}
             {!(typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) && (

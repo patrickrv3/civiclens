@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useProfile } from '../context/ProfileContext';
+import { usePushNotifications } from '../context/PushNotificationContext';
 import styles from './OnboardingModal.module.css';
 
 const LIFE_TAGS = [
@@ -20,10 +21,12 @@ const TOPIC_INTERESTS = [
     'Labor & Unions', 'Veterans Affairs', 'Agriculture'
 ];
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 5;
 
 export default function OnboardingModal({ isOpen, onClose }) {
     const { profile, updateProfile } = useProfile();
+    const { requestPermission, isNative, permissionStatus } = usePushNotifications();
+    const [notifRequested, setNotifRequested] = useState(false);
 
     // Local state for the form so we don't commit it until they click "Save"
     const [step, setStep] = useState(1);
@@ -50,13 +53,19 @@ export default function OnboardingModal({ isOpen, onClose }) {
         }
     };
 
+    const handleEnableNotifications = async () => {
+        setNotifRequested(true);
+        await requestPermission();
+    };
+
     const handleSaveAndClose = () => {
         updateProfile({
             hasCompletedOnboarding: true,
             location: { ...profile.location, zipCode },
             lifeTags: selectedTags,
             interests: selectedInterests,
-            wantsPersonalizedImpact: wantsPersonalized
+            wantsPersonalizedImpact: wantsPersonalized,
+            notificationPreferences: { watchedBills: true, general: true },
         });
         onClose();
         // Reset back to step 1 for the next time it's opened
@@ -172,6 +181,43 @@ export default function OnboardingModal({ isOpen, onClose }) {
                                     <span className={styles.slider}></span>
                                 </label>
                             </div>
+                        </div>
+                    )}
+
+                    {step === 5 && (
+                        <div className={styles.view}>
+                            <label className={styles.label}>Stay Informed</label>
+                            <p className={styles.settingDesc} style={{ marginBottom: '20px' }}>
+                                Get notified when bills you&apos;re watching change status, when the Supreme Court issues new rulings, and when major executive orders are signed.
+                            </p>
+
+                            {!isNative ? (
+                                <div className={styles.settingDesc} style={{ textAlign: 'center', padding: '20px', opacity: 0.7 }}>
+                                    Push notifications are available in the iOS app.
+                                </div>
+                            ) : notifRequested || permissionStatus === 'granted' ? (
+                                <div className={styles.settingRow} style={{ justifyContent: 'center', border: 'none', padding: '20px' }}>
+                                    <div style={{ textAlign: 'center' }}>
+                                        <div style={{ fontSize: '48px', marginBottom: '12px' }}>✅</div>
+                                        <div className={styles.settingTitle} style={{ textAlign: 'center' }}>Notifications Enabled!</div>
+                                        <div className={styles.settingDesc} style={{ textAlign: 'center', marginTop: '8px' }}>
+                                            You&apos;ll receive alerts for bill updates, court rulings, and executive orders.
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <button
+                                    className={styles.btnPrimary}
+                                    onClick={handleEnableNotifications}
+                                    style={{ width: '100%', padding: '16px', fontSize: '16px', marginBottom: '12px' }}
+                                >
+                                    🔔 Enable Notifications
+                                </button>
+                            )}
+
+                            <p className={styles.settingDesc} style={{ marginTop: '12px', fontSize: '12px', opacity: 0.6 }}>
+                                You can change notification preferences anytime in Settings.
+                            </p>
                         </div>
                     )}
                 </div>

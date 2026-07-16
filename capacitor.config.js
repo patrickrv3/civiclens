@@ -27,6 +27,9 @@ const config = {
       style: 'Light',
       backgroundColor: '#6366f1',
     },
+    PushNotifications: {
+      presentationOptions: ['badge', 'sound', 'alert'],
+    },
   },
   ios: {
     scheme: 'Civisly',

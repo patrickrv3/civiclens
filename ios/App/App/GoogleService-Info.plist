@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>191183523389-5em8esj5vj5cl1doaofppr59br70uqhq.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.191183523389-5em8esj5vj5cl1doaofppr59br70uqhq</string>
+	<key>API_KEY</key>
+	<string>AIzaSyDo8YQgytHQ84BsBl8YgIQrIR4MMaNQuHQ</string>
+	<key>GCM_SENDER_ID</key>
+	<string>191183523389</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.civisly.app</string>
+	<key>PROJECT_ID</key>
+	<string>civiclens-8b866</string>
+	<key>STORAGE_BUCKET</key>
+	<string>civiclens-8b866.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:191183523389:ios:67a3e5eafb337f7359a454</string>
+</dict>
+</plist>

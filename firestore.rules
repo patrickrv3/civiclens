@@ -26,6 +26,16 @@ service cloud.firestore {
         allow read: if request.auth != null && request.auth.uid == uid;
         allow write: if false; // Admin SDK bypasses this — client writes blocked
       }
+
+      // Device tokens for push notifications — only the owner can read/write
+      match /devices/{deviceId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+
+      // In-app notifications — only the owner can read/write
+      match /notifications/{notifId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
     }
 
     // ── Feed index (pre-built bill list for fast feed loads) ───────────────────

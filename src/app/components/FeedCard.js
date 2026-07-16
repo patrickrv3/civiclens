@@ -6,6 +6,7 @@ import { useAskAI } from './AppShell';
 import { useWatchedBills } from '../context/WatchedBillsContext';
 import { useAuth } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
+import { usePushNotifications } from '../context/PushNotificationContext';
 import UpgradeModal from './UpgradeModal';
 
 // SVG Icons
@@ -53,6 +54,7 @@ export default function FeedCard({ item, profile }) {
     const { user } = useAuth();
     const { isPro } = useSubscription();
     const { isWatching, watchBill, unwatchBill } = useWatchedBills();
+    const { isPushEnabled, requestPermission, isNative } = usePushNotifications();
     const [reaction, setReaction] = useState(null);
     const [expanded, setExpanded] = useState(false);
     const [showUpgrade, setShowUpgrade] = useState(false);
@@ -68,6 +70,11 @@ export default function FeedCard({ item, profile }) {
             await unwatchBill(item.id);
         } else {
             await watchBill(item);
+            // After first watch, prompt for push notifications if not enabled
+            if (isNative && !isPushEnabled && !localStorage.getItem('pushPromptedOnWatch')) {
+                localStorage.setItem('pushPromptedOnWatch', 'true');
+                requestPermission();
+            }
         }
     };
 

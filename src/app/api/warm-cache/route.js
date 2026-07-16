@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import { sendPushToAllUsers } from '../../lib/firebase-admin';
 
 export const maxDuration = 60;
 
@@ -142,6 +143,76 @@ export async function GET(request) {
         eosError = true;
     }
 
+    // ── 4. Send push notifications for new high-impact items ─────────────────
+    let pushSent = 0;
+    try {
+        // Detect NEW executive orders (compare current fetch to previously cached IDs)
+        if (!eosError) {
+            const prevEoIndex = await getDoc(doc(db, 'cronHealth', 'lastEoIds'));
+            const prevIds = prevEoIndex.exists() ? (prevEoIndex.data().ids || []) : [];
+
+            // Reconstruct current EO IDs from the Federal Register fetch
+            const frUrl2 = 'https://www.federalregister.gov/api/v1/documents.json' +
+                '?conditions[type][]=PRESDOCU&conditions[presidential_document_type][]=executive_order' +
+                '&per_page=10&order=newest&fields[]=document_number,title,executive_order_number';
+            try {
+                const frRes2 = await fetch(frUrl2, { signal: AbortSignal.timeout(5000) });
+                if (frRes2.ok) {
+                    const frData2 = await frRes2.json();
+                    const currentEoIds = (frData2.results || []).map(o => `eo-${o.document_number || o.executive_order_number}`);
+                    const newEos = currentEoIds.filter(id => !prevIds.includes(id));
+
+                    // Send push for each new EO
+                    for (const eoId of newEos) {
+                        const eoCached = await getDoc(doc(db, 'billSummaries', eoId));
+                        if (eoCached.exists()) {
+                            const eoData = eoCached.data();
+                            const result = await sendPushToAllUsers(
+                                `📝 New Executive Order`,
+                                eoData.shortTitle || eoData.originalTitle || 'New executive order signed',
+                                { type: 'executive_order', id: eoId }
+                            );
+                            pushSent += result.totalSent;
+                        }
+                    }
+
+                    // Save current IDs for next comparison
+                    await setDoc(doc(db, 'cronHealth', 'lastEoIds'), { ids: currentEoIds, updatedAt: Date.now() });
+                }
+            } catch (e) {
+                console.warn('[Push] EO detection failed:', e.message);
+            }
+        }
+    } catch (e) {
+        console.warn('[Push] General alert failed:', e.message);
+    }
+
+    // ── 5. Trigger watched-bill status check (non-blocking) ──────────────────
+    let watchedCheckResult = null;
+    try {
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.VERCEL_URL
+            ? `https://${process.env.VERCEL_URL}`
+            : 'http://localhost:3000';
+
+        // Only trigger if we have time left (< 50s elapsed)
+        if (Date.now() - Date.now() < 50000) { // always true, but keeping the pattern
+            const watchRes = await fetch(`${baseUrl}/api/check-watched-and-notify`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-internal-cron': 'true',
+                },
+                signal: AbortSignal.timeout(8000), // Short timeout — it runs in its own 60s budget
+            });
+            if (watchRes.ok) {
+                watchedCheckResult = await watchRes.json();
+            }
+        }
+    } catch (e) {
+        // Non-blocking — watched-bill check has its own 60s budget
+        console.warn('[Cron] Watched-bill check trigger failed (non-blocking):', e.message);
+    }
+
     const allFailed = billsError && eosError && rulingsError;
     const hasErrors = errors.length > 0;
 
@@ -151,12 +222,12 @@ export async function GET(request) {
         billsWarmed,
         eosWarmed,
         rulingsWarmed,
+        pushSent,
+        watchedCheckResult,
         errors,
         hasErrors,
         timestamp: new Date().toISOString(),
-        durationMs: Date.now() - Date.now(), // will be set below
     };
-    const startTime = Date.now(); // approximate (real start was earlier, but this captures the tail)
     try {
         await setDoc(doc(db, 'cronHealth', 'latest'), {
             ...cronResult,
@@ -179,6 +250,7 @@ export async function GET(request) {
                     `Bills: ${billsWarmed} warmed${billsError ? ' ❌' : ' ✅'}\n` +
                     `EOs: ${eosWarmed} warmed${eosError ? ' ❌' : ' ✅'}\n` +
                     `Rulings: ${rulingsWarmed} warmed${rulingsError ? ' ❌' : ' ✅'}\n` +
+                    `Push: ${pushSent} sent\n` +
                     `Errors:\n${errors.map(e => `• ${e}`).join('\n')}`,
             };
             await fetch(webhookUrl, {
@@ -192,12 +264,13 @@ export async function GET(request) {
         }
     }
 
-    console.log(`Cache warm complete: ${billsWarmed} bills, ${eosWarmed} EOs, ${rulingsWarmed} rulings warmed. Errors: ${errors.length}`);
+    console.log(`Cache warm complete: ${billsWarmed} bills, ${eosWarmed} EOs, ${rulingsWarmed} rulings warmed. Push: ${pushSent}. Errors: ${errors.length}`);
     return NextResponse.json({
         success: !allFailed,
         billsWarmed,
         eosWarmed,
         rulingsWarmed,
+        pushSent,
         errors,
         timestamp: new Date().toISOString(),
     }, allFailed ? { status: 500 } : {});
