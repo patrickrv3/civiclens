@@ -1,24 +1,23 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from './AuthContext';
 
-// Dynamic import — prevents crashes on app builds without the native push plugin
-let PushNotificationsPlugin = null;
-async function getPushPlugin() {
-    if (!PushNotificationsPlugin) {
+// Register the plugin via Capacitor's native bridge — works with remote URL loading
+let PushPlugin = null;
+function getPushPlugin() {
+    if (!PushPlugin && typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
         try {
-            const mod = await import('@capacitor/push-notifications');
-            PushNotificationsPlugin = mod.PushNotifications;
+            PushPlugin = registerPlugin('PushNotifications');
         } catch (e) {
             console.log('[Push] Plugin not available:', e.message);
             return null;
         }
     }
-    return PushNotificationsPlugin;
+    return PushPlugin;
 }
 
 const PushNotificationContext = createContext({});
@@ -54,8 +53,8 @@ export function PushNotificationProvider({ children }) {
     useEffect(() => {
         if (!isNative || listenerRegistered.current) return;
 
-        async function initPush() {
-            const Push = await getPushPlugin();
+        function initPush() {
+            const Push = getPushPlugin();
             if (!Push) return; // Plugin not available (old app build)
 
             listenerRegistered.current = true;
@@ -80,12 +79,12 @@ export function PushNotificationProvider({ children }) {
             // Listen for notification taps
             Push.addListener('pushNotificationActionPerformed', (action) => {
                 console.log('[Push] Notification tapped:', action);
-                // Future: deep link to the relevant bill/ruling based on action.notification.data
             });
 
             // Check current permission status
-            const result = await Push.checkPermissions();
-            setPermissionStatus(result.receive);
+            Push.checkPermissions().then(result => {
+                setPermissionStatus(result.receive);
+            }).catch(() => {});
         }
 
         initPush();
@@ -125,11 +124,15 @@ export function PushNotificationProvider({ children }) {
         }
 
         try {
-            const Push = await getPushPlugin();
-            if (!Push) return false;
+            const Push = getPushPlugin();
+            if (!Push) {
+                console.log('[Push] Plugin not available');
+                return false;
+            }
 
             // Check current status first
             const currentStatus = await Push.checkPermissions();
+            console.log('[Push] Current permission status:', currentStatus.receive);
 
             if (currentStatus.receive === 'granted') {
                 setPermissionStatus('granted');
@@ -138,14 +141,13 @@ export function PushNotificationProvider({ children }) {
             }
 
             if (currentStatus.receive === 'denied') {
-                // User previously denied — can't re-prompt from code
-                // They need to go to Settings manually
                 setPermissionStatus('denied');
                 return false;
             }
 
             // Request permission (shows the iOS system prompt)
             const result = await Push.requestPermissions();
+            console.log('[Push] Permission result:', result.receive);
             setPermissionStatus(result.receive);
 
             if (result.receive === 'granted') {
