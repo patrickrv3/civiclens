@@ -59,12 +59,24 @@ export function PushNotificationProvider({ children }) {
 
             listenerRegistered.current = true;
 
-            // Listen for token registration
-            Push.addListener('registration', (token) => {
-                console.log('[Push] FCM token received:', token.value.substring(0, 20) + '...');
-                setFcmToken(token.value);
-                localStorage.setItem('fcmToken', token.value);
-            });
+            // Listen for FCM token injected by native AppDelegate (MessagingDelegate)
+            // This gives us the real FCM token, not the APNs device token
+            const handleFcmToken = (e) => {
+                const token = e.detail?.token;
+                if (token) {
+                    console.log('[Push] FCM token received from native:', token.substring(0, 20) + '...');
+                    setFcmToken(token);
+                    localStorage.setItem('fcmToken', token);
+                }
+            };
+            window.addEventListener('fcmToken', handleFcmToken);
+
+            // Also check if the token was already injected before this listener was added
+            if (window.__FCM_TOKEN__) {
+                console.log('[Push] FCM token found on window:', window.__FCM_TOKEN__.substring(0, 20) + '...');
+                setFcmToken(window.__FCM_TOKEN__);
+                localStorage.setItem('fcmToken', window.__FCM_TOKEN__);
+            }
 
             // Listen for registration errors
             Push.addListener('registrationError', (error) => {

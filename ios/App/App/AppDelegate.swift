@@ -2,6 +2,7 @@ import UIKit
 import Capacitor
 import FirebaseCore
 import FirebaseMessaging
+import WebKit
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -11,6 +12,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Initialize Firebase
         FirebaseApp.configure()
+
+        // Set Firebase Messaging delegate to receive FCM token
+        Messaging.messaging().delegate = self
 
         // Force light mode — app doesn't support dark mode
         if let window = self.window {
@@ -83,5 +87,41 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         NotificationCenter.default.post(name: Notification.Name("pushNotificationActionPerformed"), object: response)
         completionHandler()
+    }
+}
+
+// MARK: - Firebase MessagingDelegate
+extension AppDelegate: MessagingDelegate {
+    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+        guard let token = fcmToken else { return }
+        print("[Firebase] FCM token received: \(token.prefix(30))...")
+
+        // Inject FCM token into the WebView so JS can save it to Firestore
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            guard let scenes = UIApplication.shared.connectedScenes as? Set<UIWindowScene>,
+                  let windowScene = scenes.first,
+                  let window = windowScene.windows.first(where: { $0.isKeyWindow }),
+                  let rootVC = window.rootViewController else { return }
+
+            // Walk the view hierarchy to find the WKWebView
+            func findWebView(in view: UIView) -> WKWebView? {
+                if let wv = view as? WKWebView { return wv }
+                for sub in view.subviews {
+                    if let wv = findWebView(in: sub) { return wv }
+                }
+                return nil
+            }
+
+            if let webView = findWebView(in: rootVC.view) {
+                let js = "window.__FCM_TOKEN__ = '\(token)'; window.dispatchEvent(new CustomEvent('fcmToken', {detail: {token: '\(token)'}}));"
+                webView.evaluateJavaScript(js) { _, error in
+                    if let error = error {
+                        print("[Firebase] Failed to inject FCM token: \(error)")
+                    } else {
+                        print("[Firebase] FCM token injected into WebView")
+                    }
+                }
+            }
+        }
     }
 }
