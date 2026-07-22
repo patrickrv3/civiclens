@@ -1,25 +1,21 @@
 import { NextResponse } from 'next/server';
-import { initializeApp, getApps, deleteApp, cert } from 'firebase-admin/app';
+import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
 
-function getFreshAdmin() {
-    // Delete existing default app to force re-init with current env vars
-    const existing = getApps();
-    if (existing.length > 0) {
-        // Use existing app
-        const app = existing[0];
-        return { db: getFirestore(app), messaging: getMessaging(app) };
+// Use a dedicated named app to avoid conflicts with stale singletons
+let fcmApp = null;
+function getAdmin() {
+    if (!fcmApp) {
+        fcmApp = initializeApp({
+            credential: cert({
+                projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
+                clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+                privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+            }),
+        }, 'fcm-push-' + Date.now());
     }
-    
-    const app = initializeApp({
-        credential: cert({
-            projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
-            clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-            privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-        }),
-    });
-    return { db: getFirestore(app), messaging: getMessaging(app) };
+    return { db: getFirestore(fcmApp), messaging: getMessaging(fcmApp) };
 }
 
 export async function POST(request) {
@@ -34,9 +30,8 @@ export async function POST(request) {
             return NextResponse.json({ error: 'uid required' }, { status: 400 });
         }
 
-        const { db, messaging } = getFreshAdmin();
+        const { db, messaging } = getAdmin();
 
-        // Get device tokens
         const devicesSnap = await db.collection('users').doc(uid).collection('devices').get();
 
         if (devicesSnap.empty) {

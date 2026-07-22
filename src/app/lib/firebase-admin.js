@@ -2,27 +2,28 @@ import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
 
-// Singleton Firebase Admin initialization
-function initAdmin() {
-    if (getApps().length === 0) {
-        initializeApp({
-            credential: cert({
-                projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
-                clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-                privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-            }),
-        });
-    }
+// Dedicated named app for FCM operations — avoids conflicts with stale default app
+const FCM_APP_NAME = 'fcm-admin';
+
+function getOrCreateApp() {
+    const existing = getApps().find(a => a.name === FCM_APP_NAME);
+    if (existing) return existing;
+
+    return initializeApp({
+        credential: cert({
+            projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
+            clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+            privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        }),
+    }, FCM_APP_NAME);
 }
 
 export function getAdminDb() {
-    initAdmin();
-    return getFirestore();
+    return getFirestore(getOrCreateApp());
 }
 
 export function getAdminMessaging() {
-    initAdmin();
-    return getMessaging();
+    return getMessaging(getOrCreateApp());
 }
 
 /**
