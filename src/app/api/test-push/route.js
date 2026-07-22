@@ -3,21 +3,6 @@ import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
 
-// Use a dedicated named app to avoid conflicts with stale singletons
-let fcmApp = null;
-function getAdmin() {
-    if (!fcmApp) {
-        fcmApp = initializeApp({
-            credential: cert({
-                projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
-                clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-                privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-            }),
-        }, 'fcm-push-' + Date.now());
-    }
-    return { db: getFirestore(fcmApp), messaging: getMessaging(fcmApp) };
-}
-
 export async function POST(request) {
     const authHeader = request.headers.get('authorization');
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -30,14 +15,20 @@ export async function POST(request) {
             return NextResponse.json({ error: 'uid required' }, { status: 400 });
         }
 
-        const { db, messaging } = getAdmin();
+        // Fresh app every time — identical to working debug endpoint
+        const appName = 'test-push-' + Date.now();
+        const app = initializeApp({
+            credential: cert({
+                projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
+                clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+                privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+            }),
+        }, appName);
+
+        const db = getFirestore(app);
+        const messaging = getMessaging(app);
 
         const devicesSnap = await db.collection('users').doc(uid).collection('devices').get();
-
-        if (devicesSnap.empty) {
-            return NextResponse.json({ error: 'No devices found' });
-        }
-
         const tokens = devicesSnap.docs
             .filter(d => d.data().enabled && d.data().token)
             .map(d => d.data().token);
@@ -46,21 +37,17 @@ export async function POST(request) {
             return NextResponse.json({ error: 'No enabled tokens' });
         }
 
-        const message = {
+        const response = await messaging.sendEachForMulticast({
             notification: {
                 title: '🔔 Test from Civisly',
-                body: 'Push notifications are working! You\'ll receive alerts for bill updates and executive orders.',
+                body: 'Push notifications are working!',
             },
             data: { type: 'test' },
             tokens,
-            apns: {
-                payload: { aps: { sound: 'default', badge: 1 } },
-            },
-        };
+            apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+        });
 
-        const response = await messaging.sendEachForMulticast(message);
-
-        const details = response.responses.map((resp, i) => ({
+        const details = response.responses.map((resp) => ({
             success: resp.success,
             messageId: resp.messageId || null,
             error: resp.error ? { code: resp.error.code, message: resp.error.message } : null,
@@ -68,8 +55,8 @@ export async function POST(request) {
 
         return NextResponse.json({
             success: response.successCount > 0,
-            successCount: response.successCount,
-            failureCount: response.failureCount,
+            sent: response.successCount,
+            failed: response.failureCount,
             details,
         });
     } catch (err) {
