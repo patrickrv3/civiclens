@@ -1,10 +1,27 @@
 import { NextResponse } from 'next/server';
-import { getAdminDb, getAdminMessaging } from '../../lib/firebase-admin';
+import { initializeApp, getApps, deleteApp, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { getMessaging } from 'firebase-admin/messaging';
 
-/**
- * POST /api/test-push
- * Sends a test push notification with verbose debugging.
- */
+function getFreshAdmin() {
+    // Delete existing default app to force re-init with current env vars
+    const existing = getApps();
+    if (existing.length > 0) {
+        // Use existing app
+        const app = existing[0];
+        return { db: getFirestore(app), messaging: getMessaging(app) };
+    }
+    
+    const app = initializeApp({
+        credential: cert({
+            projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
+            clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+            privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        }),
+    });
+    return { db: getFirestore(app), messaging: getMessaging(app) };
+}
+
 export async function POST(request) {
     const authHeader = request.headers.get('authorization');
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -17,20 +34,13 @@ export async function POST(request) {
             return NextResponse.json({ error: 'uid required' }, { status: 400 });
         }
 
-        const db = getAdminDb();
-        const messaging = getAdminMessaging();
+        const { db, messaging } = getFreshAdmin();
 
         // Get device tokens
         const devicesSnap = await db.collection('users').doc(uid).collection('devices').get();
-        const devices = devicesSnap.docs.map(d => ({
-            id: d.id,
-            token: d.data().token?.substring(0, 30) + '...',
-            enabled: d.data().enabled,
-            platform: d.data().platform,
-        }));
 
         if (devicesSnap.empty) {
-            return NextResponse.json({ error: 'No devices found', uid, devices });
+            return NextResponse.json({ error: 'No devices found' });
         }
 
         const tokens = devicesSnap.docs
@@ -38,21 +48,18 @@ export async function POST(request) {
             .map(d => d.data().token);
 
         if (tokens.length === 0) {
-            return NextResponse.json({ error: 'No enabled tokens', uid, devices });
+            return NextResponse.json({ error: 'No enabled tokens' });
         }
 
-        // Send directly with full error details
         const message = {
             notification: {
                 title: '🔔 Test from Civisly',
-                body: 'Push notifications are working!',
+                body: 'Push notifications are working! You\'ll receive alerts for bill updates and executive orders.',
             },
             data: { type: 'test' },
             tokens,
             apns: {
-                payload: {
-                    aps: { sound: 'default', badge: 1 },
-                },
+                payload: { aps: { sound: 'default', badge: 1 } },
             },
         };
 
@@ -61,25 +68,16 @@ export async function POST(request) {
         const details = response.responses.map((resp, i) => ({
             success: resp.success,
             messageId: resp.messageId || null,
-            error: resp.error ? {
-                code: resp.error.code,
-                message: resp.error.message,
-            } : null,
+            error: resp.error ? { code: resp.error.code, message: resp.error.message } : null,
         }));
 
         return NextResponse.json({
             success: response.successCount > 0,
             successCount: response.successCount,
             failureCount: response.failureCount,
-            devices,
             details,
         });
     } catch (err) {
-        console.error('[TestPush] Error:', err);
-        return NextResponse.json({
-            error: err.message,
-            code: err.code,
-            stack: err.stack?.split('\n').slice(0, 3),
-        }, { status: 500 });
+        return NextResponse.json({ error: err.message, code: err.code }, { status: 500 });
     }
 }
