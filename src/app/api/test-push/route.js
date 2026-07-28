@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { getMessaging } from 'firebase-admin/messaging';
+import { GoogleAuth } from 'google-auth-library';
 
 export async function POST(request) {
     const authHeader = request.headers.get('authorization');
@@ -11,72 +11,73 @@ export async function POST(request) {
 
     try {
         const { uid } = await request.json();
-        if (!uid) {
-            return NextResponse.json({ error: 'uid required' }, { status: 400 });
-        }
 
-        const app = initializeApp({
-            credential: cert({
-                projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
-                clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-                privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-            }),
-        }, 'test-push-' + Date.now());
+        const cred = {
+            projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
+            clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+            privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        };
 
+        // Get token from Firestore
+        const app = initializeApp({ credential: cert(cred) }, 'raw-test-' + Date.now());
         const db = getFirestore(app);
-        const messaging = getMessaging(app);
-
-        // Get tokens
         const devicesSnap = await db.collection('users').doc(uid).collection('devices').get();
-        const tokens = devicesSnap.docs
-            .filter(d => d.data().enabled && d.data().token)
-            .map(d => d.data().token);
+        const token = devicesSnap.docs.find(d => d.data().enabled && d.data().token)?.data()?.token;
 
-        if (tokens.length === 0) {
-            return NextResponse.json({ error: 'No enabled tokens' });
-        }
+        if (!token) return NextResponse.json({ error: 'No token found' });
 
-        const results = [];
+        // Get OAuth2 access token manually
+        const auth = new GoogleAuth({
+            credentials: {
+                client_email: cred.clientEmail,
+                private_key: cred.privateKey,
+            },
+            scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
+        });
+        const accessToken = await auth.getAccessToken();
 
-        // Test 1: Dry run with fake token
-        try {
-            await messaging.send({ token: 'fake', notification: { title: 't', body: 't' } }, true);
-            results.push({ test: 'dry-run-fake', result: 'success' });
-        } catch (e) {
-            results.push({ test: 'dry-run-fake', code: e.code, msg: e.message?.substring(0, 100) });
-        }
-
-        // Test 2: Dry run with REAL token
-        try {
-            await messaging.send({
-                token: tokens[0],
-                notification: { title: 'test', body: 'test' },
-            }, true); // dry run
-            results.push({ test: 'dry-run-real-token', result: 'success' });
-        } catch (e) {
-            results.push({ test: 'dry-run-real-token', code: e.code, msg: e.message?.substring(0, 100) });
-        }
-
-        // Test 3: Real send with messaging.send (NOT sendEachForMulticast)
-        try {
-            const msgId = await messaging.send({
-                token: tokens[0],
+        // Make raw FCM v1 API call
+        const fcmUrl = `https://fcm.googleapis.com/v1/projects/${cred.projectId}/messages:send`;
+        
+        const body = {
+            message: {
+                token: token,
                 notification: {
-                    title: '🔔 Test from Civisly',
+                    title: 'Test from Civisly',
                     body: 'Push notifications are working!',
                 },
-                apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-            });
-            results.push({ test: 'real-send-single', result: 'success', messageId: msgId });
-        } catch (e) {
-            results.push({ test: 'real-send-single', code: e.code, msg: e.message?.substring(0, 100) });
-        }
+            },
+        };
+
+        // Test 1: dry run
+        const dryRes = await fetch(fcmUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ ...body, validate_only: true }),
+        });
+        const dryData = await dryRes.text();
+
+        // Test 2: real send
+        const realRes = await fetch(fcmUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+        });
+        const realData = await realRes.text();
 
         return NextResponse.json({
-            tokenPrefix: tokens[0]?.substring(0, 30),
-            tokenLength: tokens[0]?.length,
-            projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
-            results,
+            tokenPrefix: token.substring(0, 30),
+            projectId: cred.projectId,
+            hasAccessToken: !!accessToken,
+            accessTokenPrefix: accessToken?.substring(0, 20),
+            dryRun: { status: dryRes.status, body: dryData.substring(0, 500) },
+            realSend: { status: realRes.status, body: realData.substring(0, 500) },
         });
     } catch (err) {
         return NextResponse.json({ error: err.message, code: err.code }, { status: 500 });
