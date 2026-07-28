@@ -15,79 +15,70 @@ export async function POST(request) {
             return NextResponse.json({ error: 'uid required' }, { status: 400 });
         }
 
-        const pk = process.env.FIREBASE_ADMIN_PRIVATE_KEY;
-        const cred = {
-            projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
-            clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-            privateKey: pk?.replace(/\\n/g, '\n'),
-        };
+        const app = initializeApp({
+            credential: cert({
+                projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
+                clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+                privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+            }),
+        }, 'test-push-' + Date.now());
 
-        // Step 1: Create fresh app
-        const appName = 'test-push-' + Date.now();
-        const app = initializeApp({ credential: cert(cred) }, appName);
         const db = getFirestore(app);
         const messaging = getMessaging(app);
 
-        // Step 2: Dry-run test (same as working debug endpoint)
-        let dryRunResult = null;
-        try {
-            await messaging.send({
-                token: 'fake-dry-run-token',
-                notification: { title: 'test', body: 'test' },
-            }, true);
-            dryRunResult = 'success (unexpected)';
-        } catch (e) {
-            dryRunResult = `${e.code}: ${e.message}`;
-        }
-
-        // Step 3: Get real tokens from Firestore
+        // Get tokens
         const devicesSnap = await db.collection('users').doc(uid).collection('devices').get();
         const tokens = devicesSnap.docs
             .filter(d => d.data().enabled && d.data().token)
             .map(d => d.data().token);
 
         if (tokens.length === 0) {
-            return NextResponse.json({
-                error: 'No enabled tokens',
-                dryRunResult,
-                devices: devicesSnap.docs.map(d => ({
-                    id: d.id,
-                    enabled: d.data().enabled,
-                    hasToken: !!d.data().token,
-                    tokenPrefix: d.data().token?.substring(0, 20) || 'none',
-                })),
-            });
+            return NextResponse.json({ error: 'No enabled tokens' });
         }
 
-        // Step 4: Send real notification
-        const response = await messaging.sendEachForMulticast({
-            notification: {
-                title: '🔔 Test from Civisly',
-                body: 'Push notifications are working!',
-            },
-            data: { type: 'test' },
-            tokens,
-            apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-        });
+        const results = [];
+
+        // Test 1: Dry run with fake token
+        try {
+            await messaging.send({ token: 'fake', notification: { title: 't', body: 't' } }, true);
+            results.push({ test: 'dry-run-fake', result: 'success' });
+        } catch (e) {
+            results.push({ test: 'dry-run-fake', code: e.code, msg: e.message?.substring(0, 100) });
+        }
+
+        // Test 2: Dry run with REAL token
+        try {
+            await messaging.send({
+                token: tokens[0],
+                notification: { title: 'test', body: 'test' },
+            }, true); // dry run
+            results.push({ test: 'dry-run-real-token', result: 'success' });
+        } catch (e) {
+            results.push({ test: 'dry-run-real-token', code: e.code, msg: e.message?.substring(0, 100) });
+        }
+
+        // Test 3: Real send with messaging.send (NOT sendEachForMulticast)
+        try {
+            const msgId = await messaging.send({
+                token: tokens[0],
+                notification: {
+                    title: '🔔 Test from Civisly',
+                    body: 'Push notifications are working!',
+                },
+                apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+            });
+            results.push({ test: 'real-send-single', result: 'success', messageId: msgId });
+        } catch (e) {
+            results.push({ test: 'real-send-single', code: e.code, msg: e.message?.substring(0, 100) });
+        }
 
         return NextResponse.json({
-            success: response.successCount > 0,
-            sent: response.successCount,
-            failed: response.failureCount,
-            dryRunResult,
-            tokenCount: tokens.length,
-            tokenPrefixes: tokens.map(t => t.substring(0, 20)),
-            details: response.responses.map((resp) => ({
-                success: resp.success,
-                messageId: resp.messageId || null,
-                error: resp.error ? { code: resp.error.code, message: resp.error.message } : null,
-            })),
+            tokenPrefix: tokens[0]?.substring(0, 30),
+            tokenLength: tokens[0]?.length,
+            projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
+            results,
         });
     } catch (err) {
-        return NextResponse.json({
-            error: err.message,
-            code: err.code,
-            stack: err.stack?.split('\n').slice(0, 3),
-        }, { status: 500 });
+        return NextResponse.json({ error: err.message, code: err.code }, { status: 500 });
     }
 }
