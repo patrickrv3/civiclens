@@ -531,6 +531,35 @@ export default function Home() {
           </div>
         ) : filteredItems.length > 0 ? (
           <div className={styles.feedList}>
+            {/* Legislature recess indicator for State & Local tab */}
+            {activeTab === 'State & Local' && stateFeedItems.length > 0 && (() => {
+              const newestDate = stateFeedItems.reduce((latest, item) => {
+                const d = new Date(item.latestActionDate || item.date || 0);
+                return d > latest ? d : latest;
+              }, new Date(0));
+              const daysSince = Math.floor((Date.now() - newestDate.getTime()) / (1000 * 60 * 60 * 24));
+              if (daysSince > 14) {
+                const formattedDate = newestDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                return (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    padding: '12px 16px', marginBottom: '12px',
+                    background: 'linear-gradient(135deg, rgba(139,92,246,0.08), rgba(59,130,246,0.06))',
+                    border: '1px solid rgba(139,92,246,0.2)',
+                    borderRadius: '12px', fontSize: '0.85rem', color: 'var(--cl-text-secondary, #666)',
+                  }}>
+                    <span style={{ fontSize: '1.3rem', flexShrink: 0 }}>🏛️</span>
+                    <div>
+                      <strong style={{ color: 'var(--cl-text-primary, #333)' }}>Legislature in recess</strong>
+                      <span style={{ marginLeft: '4px' }}>
+                        — Last legislative activity was {formattedDate}. Bills below reflect the most recent session activity.
+                      </span>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
             {filteredItems.map(item => (
               <FeedCard key={item.id} item={item} profile={profile} />
             ))}
