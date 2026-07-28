@@ -170,7 +170,7 @@ async function fetchCL(url, label) {
             await delay(backoff);
         }
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 20000);
+        const timeout = setTimeout(() => controller.abort(), 10000);
         try {
             const res = await fetch(url, {
                 headers: { Authorization: `Token ${process.env.COURTLISTENER_API_TOKEN}` },
@@ -348,7 +348,7 @@ async function enrichWithOpinionText(items) {
             opinionText: opinionText || '(No opinion text available — summarize based on case name and context)',
         });
         // Small delay between requests to avoid rate limiting
-        if (items.length > 1) await delay(500);
+        if (items.length > 1) await delay(200);
     }
     return enriched;
 }
@@ -471,7 +471,7 @@ export async function POST(request) {
             console.log('[Cache] Saved cache index with latest IDs before enrichment');
 
             // Cap new items per request to avoid overwhelming OpenAI / timing out
-            const MAX_NEW_PER_REQUEST = 15;
+            const MAX_NEW_PER_REQUEST = 8;
             if (allNewItems.length > MAX_NEW_PER_REQUEST) {
                 console.log(`[Cap] ${allNewItems.length} new items found, processing ${MAX_NEW_PER_REQUEST} now, deferring ${allNewItems.length - MAX_NEW_PER_REQUEST} to next refresh`);
                 allNewItems = allNewItems.slice(0, MAX_NEW_PER_REQUEST);
@@ -480,9 +480,9 @@ export async function POST(request) {
             // Time budget check — if we've already used 40+ seconds on CourtListener,
             // skip AI enrichment and save the cache with just the IDs
             const elapsed = Date.now() - now;
-            if (elapsed > 40000 && allNewItems.length > 5) {
+            if (elapsed > 25000 && allNewItems.length > 3) {
                 console.warn(`[Budget] ${elapsed}ms elapsed, trimming AI work to 5 items`);
-                allNewItems = allNewItems.slice(0, 5);
+                allNewItems = allNewItems.slice(0, 3);
             }
 
             // Step 4: Enrich ALL new items with opinion text ONCE (sequential, rate-limit safe)
