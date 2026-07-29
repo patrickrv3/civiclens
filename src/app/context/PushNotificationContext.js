@@ -5,6 +5,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from './AuthContext';
+import NotificationToast from '../components/NotificationToast';
 
 // Register the plugin via Capacitor's native bridge — works with remote URL loading
 let PushPlugin = null;
@@ -42,6 +43,7 @@ export function PushNotificationProvider({ children }) {
     const [fcmToken, setFcmToken] = useState(null);
     const [permissionStatus, setPermissionStatus] = useState('unknown'); // 'granted' | 'denied' | 'prompt' | 'unknown'
     const [isNative, setIsNative] = useState(false);
+    const [toastNotification, setToastNotification] = useState(null);
     const listenerRegistered = useRef(false);
 
     // Check if we're on a native platform
@@ -86,6 +88,11 @@ export function PushNotificationProvider({ children }) {
             // Listen for notifications received while app is in foreground
             Push.addListener('pushNotificationReceived', (notification) => {
                 console.log('[Push] Notification received in foreground:', notification);
+                setToastNotification({
+                    title: notification.title || '',
+                    body: notification.body || '',
+                    data: notification.data || {},
+                });
             });
 
             // Listen for notification taps — navigate to the relevant page
@@ -223,9 +230,35 @@ export function PushNotificationProvider({ children }) {
         unregisterDevice,
     };
 
+    // Navigate based on notification data type
+    function navigateForNotification(data) {
+        if (!data?.type) return;
+        let targetPage = null;
+        switch (data.type) {
+            case 'court_ruling':
+                targetPage = 'rulings';
+                break;
+            case 'executive_order':
+            case 'bill_milestone':
+            case 'watched_bill':
+                targetPage = 'feed';
+                break;
+            default:
+                break;
+        }
+        if (targetPage) {
+            window.dispatchEvent(new CustomEvent('civiclens:navigate', { detail: targetPage }));
+        }
+    }
+
     return (
         <PushNotificationContext.Provider value={value}>
             {children}
+            <NotificationToast
+                notification={toastNotification}
+                onDismiss={() => setToastNotification(null)}
+                onTap={(n) => navigateForNotification(n?.data)}
+            />
         </PushNotificationContext.Provider>
     );
 }
