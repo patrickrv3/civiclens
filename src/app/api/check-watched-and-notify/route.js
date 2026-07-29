@@ -198,7 +198,7 @@ export async function POST(request) {
                 // Send push notification
                 const pushResult = await sendPushToUser(
                     change.uid,
-                    `📋 ${title}`,
+                    title,
                     `Status changed: ${change.oldStatus} → ${change.newStatus}`,
                     { billId: change.billId, type: 'watched_bill' },
                     'watched'

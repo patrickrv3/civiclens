@@ -242,25 +242,25 @@ async function runBillScan() {
     if (durationMs < 52000) { // Only if we have time left
         try {
             const MILESTONE_PATTERNS = [
-                { pattern: 'became public law', milestone: 'Signed into Law', emoji: '✅' },
-                { pattern: 'signed by president', milestone: 'Signed into Law', emoji: '✅' },
-                { pattern: 'presented to president', milestone: 'Presented to President', emoji: '📋' },
-                { pattern: 'enrolled bill', milestone: 'Passed Both Chambers', emoji: '🏛️' },
-                { pattern: 'passed senate', milestone: 'Passed Senate', emoji: '📜' },
-                { pattern: 'passed/agreed to in senate', milestone: 'Passed Senate', emoji: '📜' },
-                { pattern: 'agreed to in senate', milestone: 'Passed Senate', emoji: '📜' },
-                { pattern: 'passed house', milestone: 'Passed House', emoji: '📜' },
-                { pattern: 'passed/agreed to in house', milestone: 'Passed House', emoji: '📜' },
-                { pattern: 'agreed to in house', milestone: 'Passed House', emoji: '📜' },
+                { pattern: 'became public law', milestone: 'Signed into Law' },
+                { pattern: 'signed by president', milestone: 'Signed into Law' },
+                { pattern: 'presented to president', milestone: 'Presented to President' },
+                { pattern: 'enrolled bill', milestone: 'Passed Both Chambers' },
+                { pattern: 'passed senate', milestone: 'Passed Senate' },
+                { pattern: 'passed/agreed to in senate', milestone: 'Passed Senate' },
+                { pattern: 'agreed to in senate', milestone: 'Passed Senate' },
+                { pattern: 'passed house', milestone: 'Passed House' },
+                { pattern: 'passed/agreed to in house', milestone: 'Passed House' },
+                { pattern: 'agreed to in house', milestone: 'Passed House' },
             ];
 
             // Find bills with significant milestones
             const milestoneBills = [];
             for (const bill of indexBills) {
                 const action = (bill.latestAction || '').toLowerCase();
-                for (const { pattern, milestone, emoji } of MILESTONE_PATTERNS) {
+                for (const { pattern, milestone } of MILESTONE_PATTERNS) {
                     if (action.includes(pattern)) {
-                        milestoneBills.push({ ...bill, milestone, emoji });
+                        milestoneBills.push({ ...bill, milestone });
                         break; // Take first (highest priority) match
                     }
                 }
@@ -299,7 +299,7 @@ async function runBillScan() {
                                     if (data.impactLevel === 'High Impact') {
                                         const title = data.shortTitle || data.originalTitle || bill.title;
                                         const result = await sendPushToAllUsers(
-                                            `${bill.emoji} Bill ${bill.milestone}`,
+                                            `Bill ${bill.milestone}`,
                                             title,
                                             { type: 'bill_milestone', id: bill.id, milestone: bill.milestone }
                                         );

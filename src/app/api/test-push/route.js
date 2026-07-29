@@ -37,7 +37,7 @@ export async function POST(request) {
 
         const response = await messaging.sendEachForMulticast({
             notification: {
-                title: '🔔 Test from Civisly',
+                title: 'Test from Civisly',
                 body: 'Push notifications are working!',
             },
             data: { type: 'test' },

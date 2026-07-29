@@ -170,7 +170,7 @@ export async function GET(request) {
                         if (eoCached.exists()) {
                             const eoData = eoCached.data();
                             const result = await sendPushToAllUsers(
-                                `📝 New Executive Order`,
+                                'New Executive Order',
                                 eoData.shortTitle || eoData.originalTitle || 'New executive order signed',
                                 { type: 'executive_order', id: eoId }
                             );
@@ -210,7 +210,7 @@ export async function GET(request) {
                         const scotusRulings = newRulings.filter(r => r.courtType === 'scotus');
                         for (const ruling of scotusRulings) {
                             const result = await sendPushToAllUsers(
-                                '⚖️ Supreme Court Ruling',
+                                'Supreme Court Ruling',
                                 ruling.caseName || ruling.shortTitle || 'New Supreme Court ruling',
                                 { type: 'court_ruling', id: ruling.id, courtType: 'scotus' }
                             );
@@ -226,7 +226,7 @@ export async function GET(request) {
                             if (appealsCount > 0) parts.push(`${appealsCount} appeals`);
                             if (districtCount > 0) parts.push(`${districtCount} district`);
                             const result = await sendPushToAllUsers(
-                                '🏛️ New Court Rulings',
+                                'New Court Rulings',
                                 `${otherRulings.length} new federal court ruling${otherRulings.length > 1 ? 's' : ''} (${parts.join(', ')})`,
                                 { type: 'court_ruling', courtType: 'batch' }
                             );
