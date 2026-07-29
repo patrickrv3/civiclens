@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import { sendPushToAllUsers } from '../../lib/firebase-admin';
 
 export const maxDuration = 60;
 
@@ -236,12 +237,103 @@ async function runBillScan() {
     const durationMs = Date.now() - startTime;
     console.log(`[warm-cache-bills] Done in ${durationMs}ms: ${billsWarmed} warmed, ${errors.length} errors`);
 
+    // ── 5. Detect major bill milestones and send push notifications ───────
+    let pushSent = 0;
+    if (durationMs < 52000) { // Only if we have time left
+        try {
+            const MILESTONE_PATTERNS = [
+                { pattern: 'became public law', milestone: 'Signed into Law', emoji: '✅' },
+                { pattern: 'signed by president', milestone: 'Signed into Law', emoji: '✅' },
+                { pattern: 'presented to president', milestone: 'Presented to President', emoji: '📋' },
+                { pattern: 'enrolled bill', milestone: 'Passed Both Chambers', emoji: '🏛️' },
+                { pattern: 'passed senate', milestone: 'Passed Senate', emoji: '📜' },
+                { pattern: 'passed/agreed to in senate', milestone: 'Passed Senate', emoji: '📜' },
+                { pattern: 'agreed to in senate', milestone: 'Passed Senate', emoji: '📜' },
+                { pattern: 'passed house', milestone: 'Passed House', emoji: '📜' },
+                { pattern: 'passed/agreed to in house', milestone: 'Passed House', emoji: '📜' },
+                { pattern: 'agreed to in house', milestone: 'Passed House', emoji: '📜' },
+            ];
+
+            // Find bills with significant milestones
+            const milestoneBills = [];
+            for (const bill of indexBills) {
+                const action = (bill.latestAction || '').toLowerCase();
+                for (const { pattern, milestone, emoji } of MILESTONE_PATTERNS) {
+                    if (action.includes(pattern)) {
+                        milestoneBills.push({ ...bill, milestone, emoji });
+                        break; // Take first (highest priority) match
+                    }
+                }
+            }
+
+            if (milestoneBills.length > 0) {
+                // Load previously notified milestones
+                const prevSnap = await getDoc(doc(db, 'cronHealth', 'lastBillMilestones'));
+                const prevMilestones = prevSnap.exists() ? (prevSnap.data().notified || {}) : {};
+
+                // First run: seed without sending
+                if (!prevSnap.exists()) {
+                    console.log(`[Push] First run — seeding ${milestoneBills.length} bill milestones (no notifications)`);
+                    const seed = {};
+                    milestoneBills.forEach(b => { seed[b.id] = b.milestone; });
+                    await setDoc(doc(db, 'cronHealth', 'lastBillMilestones'), {
+                        notified: seed,
+                        updatedAt: Date.now(),
+                    });
+                } else {
+                    // Find bills with NEW milestones (not previously notified at this level)
+                    const newMilestones = milestoneBills.filter(b => {
+                        const prev = prevMilestones[b.id];
+                        return !prev || prev !== b.milestone;
+                    });
+
+                    if (newMilestones.length > 0) {
+                        console.log(`[Push] ${newMilestones.length} bills with new milestones`);
+
+                        // Only notify for High Impact bills — read their cached summaries
+                        for (const bill of newMilestones.slice(0, 5)) { // Cap at 5 to save time
+                            try {
+                                const cached = await getDoc(doc(db, 'billSummaries', bill.id));
+                                if (cached.exists()) {
+                                    const data = cached.data();
+                                    if (data.impactLevel === 'High Impact') {
+                                        const title = data.shortTitle || data.originalTitle || bill.title;
+                                        const result = await sendPushToAllUsers(
+                                            `${bill.emoji} Bill ${bill.milestone}`,
+                                            title,
+                                            { type: 'bill_milestone', id: bill.id, milestone: bill.milestone }
+                                        );
+                                        pushSent += result.totalSent;
+                                        console.log(`[Push] Sent milestone alert: ${bill.id} → ${bill.milestone}`);
+                                    }
+                                }
+                            } catch (e) {
+                                console.warn(`[Push] Failed to check/send for ${bill.id}:`, e.message);
+                            }
+                        }
+                    }
+
+                    // Update stored milestones
+                    const updated = { ...prevMilestones };
+                    milestoneBills.forEach(b => { updated[b.id] = b.milestone; });
+                    await setDoc(doc(db, 'cronHealth', 'lastBillMilestones'), {
+                        notified: updated,
+                        updatedAt: Date.now(),
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn('[Push] Bill milestone detection failed:', e.message);
+        }
+    }
+
     // Log health to Firestore
     try {
         await setDoc(doc(db, 'cronHealth', 'latestBills'), {
             success: errors.length === 0,
             totalScanned,
             billsWarmed,
+            pushSent,
             errors,
             durationMs,
             timestamp: new Date().toISOString(),
@@ -250,7 +342,7 @@ async function runBillScan() {
         console.warn('[warm-cache-bills] Health log failed:', e.message);
     }
 
-    return { success: errors.length === 0, totalScanned, billsWarmed, errors, durationMs };
+    return { success: errors.length === 0, totalScanned, billsWarmed, pushSent, errors, durationMs };
 }
 
 // ── GET handler (called by Vercel Cron) ──────────────────────────────────────
