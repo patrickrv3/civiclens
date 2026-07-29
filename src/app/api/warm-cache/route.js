@@ -62,6 +62,7 @@ export async function GET(request) {
     let billsWarmed = 0;
     let eosWarmed = 0;
     let rulingsWarmed = 0;
+    let rulingsItems = []; // Store rulings for push notification detection
     const errors = [];
     let billsError = false;
     let eosError = false;
@@ -82,7 +83,8 @@ export async function GET(request) {
         });
         if (rulingsRes.ok) {
             const rulingsData = await rulingsRes.json();
-            rulingsWarmed = (rulingsData.items || []).length;
+            rulingsItems = rulingsData.items || [];
+            rulingsWarmed = rulingsItems.length;
         } else {
             errors.push(`Court rulings API returned ${rulingsRes.status}`);
             rulingsError = true;
@@ -181,6 +183,65 @@ export async function GET(request) {
                 }
             } catch (e) {
                 console.warn('[Push] EO detection failed:', e.message);
+            }
+        }
+
+        // Detect NEW court rulings and send push notifications
+        if (!rulingsError && rulingsItems.length > 0) {
+            try {
+                const prevRulingsIndex = await getDoc(doc(db, 'cronHealth', 'lastCourtRulingIds'));
+                const prevRulingIds = prevRulingsIndex.exists() ? (prevRulingsIndex.data().ids || []) : [];
+                const currentRulingIds = rulingsItems.map(r => r.id);
+
+                // First run: seed IDs without sending notifications
+                if (!prevRulingsIndex.exists()) {
+                    console.log(`[Push] First run — seeding ${currentRulingIds.length} court ruling IDs (no notifications)`);
+                    await setDoc(doc(db, 'cronHealth', 'lastCourtRulingIds'), {
+                        ids: currentRulingIds,
+                        updatedAt: Date.now(),
+                    });
+                } else {
+                    const newRulings = rulingsItems.filter(r => !prevRulingIds.includes(r.id));
+
+                    if (newRulings.length > 0) {
+                        console.log(`[Push] ${newRulings.length} new court rulings detected`);
+
+                        // SCOTUS rulings get individual notifications (rare and significant)
+                        const scotusRulings = newRulings.filter(r => r.courtType === 'scotus');
+                        for (const ruling of scotusRulings) {
+                            const result = await sendPushToAllUsers(
+                                '⚖️ Supreme Court Ruling',
+                                ruling.caseName || ruling.shortTitle || 'New Supreme Court ruling',
+                                { type: 'court_ruling', id: ruling.id, courtType: 'scotus' }
+                            );
+                            pushSent += result.totalSent;
+                        }
+
+                        // Appeals & District rulings get a batched summary notification
+                        const otherRulings = newRulings.filter(r => r.courtType !== 'scotus');
+                        if (otherRulings.length > 0) {
+                            const appealsCount = otherRulings.filter(r => r.courtType === 'federal_appeals').length;
+                            const districtCount = otherRulings.filter(r => r.courtType === 'district').length;
+                            const parts = [];
+                            if (appealsCount > 0) parts.push(`${appealsCount} appeals`);
+                            if (districtCount > 0) parts.push(`${districtCount} district`);
+                            const result = await sendPushToAllUsers(
+                                '🏛️ New Court Rulings',
+                                `${otherRulings.length} new federal court ruling${otherRulings.length > 1 ? 's' : ''} (${parts.join(', ')})`,
+                                { type: 'court_ruling', courtType: 'batch' }
+                            );
+                            pushSent += result.totalSent;
+                        }
+                    }
+
+                    // Save current IDs for next comparison
+                    await setDoc(doc(db, 'cronHealth', 'lastCourtRulingIds'), {
+                        ids: currentRulingIds,
+                        updatedAt: Date.now(),
+                    });
+                }
+            } catch (e) {
+                console.warn('[Push] Court ruling detection failed:', e.message);
             }
         }
     } catch (e) {
