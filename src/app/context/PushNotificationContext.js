@@ -88,9 +88,32 @@ export function PushNotificationProvider({ children }) {
                 console.log('[Push] Notification received in foreground:', notification);
             });
 
-            // Listen for notification taps
+            // Listen for notification taps — navigate to the relevant page
             Push.addListener('pushNotificationActionPerformed', (action) => {
                 console.log('[Push] Notification tapped:', action);
+                const data = action?.notification?.data || {};
+
+                // Determine target page based on notification type
+                let targetPage = null;
+                switch (data.type) {
+                    case 'court_ruling':
+                        targetPage = 'rulings';
+                        break;
+                    case 'executive_order':
+                    case 'bill_milestone':
+                    case 'watched_bill':
+                        targetPage = 'feed';
+                        break;
+                    default:
+                        break;
+                }
+
+                if (targetPage) {
+                    // Small delay to ensure the app is fully loaded after backgrounding
+                    setTimeout(() => {
+                        window.dispatchEvent(new CustomEvent('civiclens:navigate', { detail: targetPage }));
+                    }, 300);
+                }
             });
 
             // Check current permission status
