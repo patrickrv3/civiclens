@@ -28,7 +28,7 @@ function getRevenueCat() {
     return RCPlugin;
 }
 
-const RC_API_KEY = 'test_fGgAjfecYmmMkqjUXyEQUWNWIqT';
+const RC_API_KEY = 'appl_ijxbakLMpsbXAiRuduSsiYAqWFc';
 
 export function SubscriptionProvider({ children }) {
     const { user } = useAuth();
