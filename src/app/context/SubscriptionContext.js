@@ -18,7 +18,8 @@ let RCPlugin = null;
 function getRevenueCat() {
     if (!RCPlugin && typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
         try {
-            RCPlugin = registerPlugin('PurchasesPlugin');
+            // The plugin registers itself as 'Purchases' via @capacitor/core
+            RCPlugin = registerPlugin('Purchases');
         } catch (e) {
             console.log('[RC] Plugin not available:', e.message);
             return null;
