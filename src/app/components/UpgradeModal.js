@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import styles from './UpgradeModal.module.css';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useAuth } from '../context/AuthContext';
@@ -24,8 +25,10 @@ const proFeatures = [
 ];
 
 export default function UpgradeModal({ onClose }) {
-    const { startCheckout } = useSubscription();
+    const { startCheckout, purchasePro, restorePurchases, isNative } = useSubscription();
     const { user } = useAuth();
+    const [purchasing, setPurchasing] = useState(false);
+    const [restoring, setRestoring] = useState(false);
 
     const handleUpgrade = async () => {
         if (!user) {
@@ -33,7 +36,32 @@ export default function UpgradeModal({ onClose }) {
             onClose();
             return;
         }
-        await startCheckout();
+
+        setPurchasing(true);
+        try {
+            if (isNative) {
+                const success = await purchasePro();
+                if (success) onClose();
+            } else {
+                await startCheckout();
+            }
+        } finally {
+            setPurchasing(false);
+        }
+    };
+
+    const handleRestore = async () => {
+        setRestoring(true);
+        try {
+            const success = await restorePurchases();
+            if (success) {
+                onClose();
+            } else {
+                alert('No active subscription found. If you believe this is an error, please contact support.');
+            }
+        } finally {
+            setRestoring(false);
+        }
     };
 
     return (
@@ -61,11 +89,40 @@ export default function UpgradeModal({ onClose }) {
                     ))}
                 </ul>
 
-                <button className={styles.upgradeBtn} onClick={handleUpgrade}>
-                    Upgrade to Pro →
+                <button
+                    className={styles.upgradeBtn}
+                    onClick={handleUpgrade}
+                    disabled={purchasing}
+                >
+                    {purchasing ? 'Processing...' : 'Upgrade to Pro →'}
                 </button>
 
-                <p className={styles.fine}>Cancel anytime. Billed monthly via Stripe.</p>
+                {isNative && (
+                    <button
+                        onClick={handleRestore}
+                        disabled={restoring}
+                        style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#6366f1',
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            padding: '8px',
+                            marginTop: '4px',
+                            width: '100%',
+                            textAlign: 'center',
+                        }}
+                    >
+                        {restoring ? 'Restoring...' : 'Restore Purchases'}
+                    </button>
+                )}
+
+                <p className={styles.fine}>
+                    Cancel anytime. {isNative
+                        ? 'Subscription renews automatically. Manage in Settings → Apple ID → Subscriptions.'
+                        : 'Billed monthly via Stripe.'}
+                </p>
             </div>
         </div>
     );

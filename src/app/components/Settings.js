@@ -23,7 +23,7 @@ const POLICY_INTERESTS = [
 export default function Settings() {
     const { profile, updateProfile } = useProfile();
     const { user, logOut } = useAuth();
-    const { isPro, subscription, startCheckout, openPortal } = useSubscription();
+    const { isPro, subscription, startCheckout, openPortal, purchasePro, isNative: isNativeSub } = useSubscription();
     const { requestPermission, isPushEnabled, isNative, permissionStatus, fcmToken } = usePushNotifications();
     const [zip, setZip] = useState(profile.location?.zipCode || '');
     const [showSaved, setShowSaved] = useState(false);
@@ -230,8 +230,7 @@ export default function Settings() {
             </div>
             )}
 
-            {/* Subscription — hidden in iOS app until Apple IAP is implemented */}
-            {!(typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) && (
+            {/* Subscription */}
             <div className={styles.section}>
                 <div className={styles.sectionTitle}>⚡ Subscription</div>
                 <div className={styles.card}>
@@ -248,18 +247,33 @@ export default function Settings() {
                             <p style={{ fontSize: '0.85rem', color: 'var(--cl-gray-500)', marginBottom: '14px' }}>
                                 You have full access to State &amp; Local legislation and bill tracking notifications.
                             </p>
-                            <button
-                                onClick={openPortal}
-                                style={{
-                                    padding: '9px 18px', borderRadius: '10px',
-                                    border: '1px solid var(--cl-gray-200)',
-                                    background: '#fff', cursor: 'pointer',
-                                    fontSize: '0.85rem', fontWeight: 600,
-                                    color: 'var(--cl-gray-700)',
-                                }}
-                            >
-                                Manage Subscription →
-                            </button>
+                            {isNative ? (
+                                <button
+                                    onClick={() => window.open('https://apps.apple.com/account/subscriptions', '_blank')}
+                                    style={{
+                                        padding: '9px 18px', borderRadius: '10px',
+                                        border: '1px solid var(--cl-gray-200)',
+                                        background: '#fff', cursor: 'pointer',
+                                        fontSize: '0.85rem', fontWeight: 600,
+                                        color: 'var(--cl-gray-700)',
+                                    }}
+                                >
+                                    Manage in App Store →
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={openPortal}
+                                    style={{
+                                        padding: '9px 18px', borderRadius: '10px',
+                                        border: '1px solid var(--cl-gray-200)',
+                                        background: '#fff', cursor: 'pointer',
+                                        fontSize: '0.85rem', fontWeight: 600,
+                                        color: 'var(--cl-gray-700)',
+                                    }}
+                                >
+                                    Manage Subscription →
+                                </button>
+                            )}
                         </div>
                     ) : (
                         <div>
@@ -270,7 +284,7 @@ export default function Settings() {
                                 Get access to State &amp; Local legislation, bill watching, and in-app notifications — just $4.99/month.
                             </p>
                             <button
-                                onClick={startCheckout}
+                                onClick={isNative ? purchasePro : startCheckout}
                                 style={{
                                     padding: '11px 22px', borderRadius: '12px',
                                     background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
@@ -285,7 +299,6 @@ export default function Settings() {
                     )}
                 </div>
             </div>
-            )}
 
             {/* Account */}
             <div className={styles.section}>

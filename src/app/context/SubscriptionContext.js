@@ -1,6 +1,7 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { useAuth } from './AuthContext';
 import { db } from '../lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -12,11 +13,69 @@ export function useSubscription() {
     return useContext(SubscriptionContext);
 }
 
+// ── RevenueCat Plugin ────────────────────────────────────────────────────────
+let RCPlugin = null;
+function getRevenueCat() {
+    if (!RCPlugin && typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
+        try {
+            RCPlugin = registerPlugin('PurchasesPlugin');
+        } catch (e) {
+            console.log('[RC] Plugin not available:', e.message);
+            return null;
+        }
+    }
+    return RCPlugin;
+}
+
+const RC_API_KEY = 'test_zZFlvuMKFslkwEHjUltDCIngRPQ';
+
 export function SubscriptionProvider({ children }) {
     const { user } = useAuth();
     const [subscription, setSubscription] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [isNative] = useState(() => typeof window !== 'undefined' && Capacitor.isNativePlatform());
+    const [rcReady, setRcReady] = useState(false);
 
+    // ── Initialize RevenueCat on native ──────────────────────────────────────
+    useEffect(() => {
+        if (!isNative) return;
+
+        async function initRC() {
+            const RC = getRevenueCat();
+            if (!RC) return;
+
+            try {
+                await RC.configure({ apiKey: RC_API_KEY });
+                console.log('[RC] Configured successfully');
+                setRcReady(true);
+            } catch (e) {
+                console.warn('[RC] Configure failed:', e.message);
+            }
+        }
+
+        initRC();
+    }, [isNative]);
+
+    // ── Identify user with RevenueCat (links RC to Firebase UID) ─────────────
+    useEffect(() => {
+        if (!isNative || !rcReady || !user?.uid) return;
+
+        async function identifyUser() {
+            const RC = getRevenueCat();
+            if (!RC) return;
+
+            try {
+                await RC.logIn({ appUserID: user.uid });
+                console.log('[RC] User identified:', user.uid);
+            } catch (e) {
+                console.warn('[RC] Login failed:', e.message);
+            }
+        }
+
+        identifyUser();
+    }, [isNative, rcReady, user?.uid]);
+
+    // ── Firestore subscription listener (works for both Stripe and IAP) ──────
     useEffect(() => {
         if (!user) {
             setSubscription(null);
@@ -24,7 +83,6 @@ export function SubscriptionProvider({ children }) {
             return;
         }
 
-        // Listen to the user's subscription doc in real time
         const subRef = doc(db, 'users', user.uid, 'subscription', 'pro');
         const unsubscribe = onSnapshot(subRef, (snap) => {
             if (snap.exists()) {
@@ -43,6 +101,66 @@ export function SubscriptionProvider({ children }) {
 
     const isPro = subscription?.status === 'active';
 
+    // ── Native IAP Purchase (RevenueCat) ─────────────────────────────────────
+    const purchasePro = useCallback(async () => {
+        const RC = getRevenueCat();
+        if (!RC) {
+            console.error('[RC] Plugin not available for purchase');
+            return false;
+        }
+
+        try {
+            // Get current offerings
+            const offerings = await RC.getOfferings();
+            const currentOffering = offerings.current;
+
+            if (!currentOffering?.availablePackages?.length) {
+                console.error('[RC] No packages available');
+                alert('Unable to load subscription. Please try again later.');
+                return false;
+            }
+
+            // Purchase the first available package (monthly pro)
+            const pkg = currentOffering.availablePackages[0];
+            const result = await RC.purchasePackage({ aPackage: pkg });
+
+            if (result.customerInfo?.entitlements?.active?.pro) {
+                console.log('[RC] Purchase successful — Pro active');
+                return true;
+            }
+
+            return false;
+        } catch (e) {
+            if (e.code === 1 || e.message?.includes('cancelled') || e.message?.includes('canceled')) {
+                console.log('[RC] Purchase cancelled by user');
+                return false;
+            }
+            console.error('[RC] Purchase error:', e);
+            alert('Purchase failed. Please try again.');
+            return false;
+        }
+    }, []);
+
+    // ── Restore Purchases (Apple requirement) ────────────────────────────────
+    const restorePurchases = useCallback(async () => {
+        const RC = getRevenueCat();
+        if (!RC) return false;
+
+        try {
+            const result = await RC.restorePurchases();
+            if (result.customerInfo?.entitlements?.active?.pro) {
+                console.log('[RC] Restore successful — Pro active');
+                return true;
+            }
+            console.log('[RC] Restore complete — no active Pro entitlement');
+            return false;
+        } catch (e) {
+            console.error('[RC] Restore error:', e);
+            return false;
+        }
+    }, []);
+
+    // ── Web Stripe Checkout ──────────────────────────────────────────────────
     const startCheckout = async () => {
         if (!user) return;
         try {
@@ -58,6 +176,7 @@ export function SubscriptionProvider({ children }) {
         }
     };
 
+    // ── Web Stripe Portal ────────────────────────────────────────────────────
     const openPortal = async () => {
         if (!subscription?.stripeCustomerId) return;
         try {
@@ -74,7 +193,17 @@ export function SubscriptionProvider({ children }) {
     };
 
     return (
-        <SubscriptionContext.Provider value={{ isPro, subscription, loading, startCheckout, openPortal }}>
+        <SubscriptionContext.Provider value={{
+            isPro,
+            subscription,
+            loading,
+            isNative,
+            rcReady,
+            startCheckout,
+            openPortal,
+            purchasePro,
+            restorePurchases,
+        }}>
             {children}
         </SubscriptionContext.Provider>
     );
