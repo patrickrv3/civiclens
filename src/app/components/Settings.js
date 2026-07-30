@@ -24,7 +24,7 @@ export default function Settings() {
     const { profile, updateProfile } = useProfile();
     const { user, logOut } = useAuth();
     const { isPro, subscription, startCheckout, openPortal } = useSubscription();
-    const { requestPermission, isPushEnabled, isNative, permissionStatus } = usePushNotifications();
+    const { requestPermission, isPushEnabled, isNative, permissionStatus, fcmToken } = usePushNotifications();
     const [zip, setZip] = useState(profile.location?.zipCode || '');
     const [showSaved, setShowSaved] = useState(false);
     const saveTimeout = useRef(null);
@@ -173,7 +173,11 @@ export default function Settings() {
                     {!isPushEnabled && (
                         <div style={{ padding: '12px 16px', marginBottom: '8px' }}>
                             <button
-                                onClick={requestPermission}
+                                onClick={async () => {
+                                    console.log('[Push] Button pressed, requesting permission...');
+                                    const result = await requestPermission();
+                                    console.log('[Push] Permission result:', result);
+                                }}
                                 style={{
                                     width: '100%', padding: '12px', borderRadius: '10px',
                                     background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
@@ -181,8 +185,11 @@ export default function Settings() {
                                     fontWeight: 600, cursor: 'pointer',
                                 }}
                             >
-                                {permissionStatus === 'denied' ? 'Enable in iOS Settings' : '🔔 Enable Push Notifications'}
+                                {permissionStatus === 'denied' ? 'Enable in iOS Settings' : 'Enable Push Notifications'}
                             </button>
+                            <div style={{ fontSize: '11px', color: '#999', marginTop: '6px', textAlign: 'center' }}>
+                                Status: {permissionStatus} | Native: {isNative ? 'yes' : 'no'} | Token: {fcmToken ? 'yes' : 'no'}
+                            </div>
                         </div>
                     )}
                     <div className={styles.toggleRow}>
