@@ -63,12 +63,12 @@ PODS:
   - nanopb/decode (3.30910.0)
   - nanopb/encode (3.30910.0)
   - PromisesObjC (2.4.1)
-  - PurchasesHybridCommon (11.1.1):
-    - RevenueCat (= 4.43.2)
-  - RevenueCat (4.43.2)
-  - RevenuecatPurchasesCapacitor (8.0.0):
+  - PurchasesHybridCommon (13.26.0):
+    - RevenueCat (= 5.20.0)
+  - RevenueCat (5.20.0)
+  - RevenuecatPurchasesCapacitor (9.2.2):
     - Capacitor
-    - PurchasesHybridCommon (= 11.1.1)
+    - PurchasesHybridCommon (= 13.26.0)
 
 DEPENDENCIES:
   - "Capacitor (from `../../node_modules/@capacitor/ios`)"
@@ -125,9 +125,9 @@ SPEC CHECKSUMS:
   GoogleUtilities: 766ace00c6b10d8148408f329d10c4f051931850
   nanopb: fad817b59e0457d11a5dfbde799381cd727c1275
   PromisesObjC: 752c3227f599e3467650e47ea36f433eeb10c273
-  PurchasesHybridCommon: 73f4f2c6e4ec3487b4219bf60e1661100fb85da3
-  RevenueCat: 3d934653b7e8b09af88fd47e9e84cfaf5d0a89ba
-  RevenuecatPurchasesCapacitor: 838148fb2aceed5dc3b1c24877b675964db24fc0
+  PurchasesHybridCommon: fa166fc8b385cf80f581f923c91d8ccffe5dd7f8
+  RevenueCat: e47ff90dfd271fde155a4befe48e8fc02e8281e4
+  RevenuecatPurchasesCapacitor: 6727a4dc1455bdf2374259420719ce5dfbe957fa
 
 PODFILE CHECKSUM: 1ee806feb79d913226609a586529957377def53b
 
