@@ -68,6 +68,7 @@ export function PushNotificationProvider({ children }) {
                 if (token) {
                     console.log('[Push] FCM token received from native:', token.substring(0, 20) + '...');
                     setFcmToken(token);
+                    setPermissionStatus('granted'); // Token exists = permission was granted
                     localStorage.setItem('fcmToken', token);
                 }
             };
@@ -77,6 +78,7 @@ export function PushNotificationProvider({ children }) {
             if (window.__FCM_TOKEN__) {
                 console.log('[Push] FCM token found on window:', window.__FCM_TOKEN__.substring(0, 20) + '...');
                 setFcmToken(window.__FCM_TOKEN__);
+                setPermissionStatus('granted'); // Token exists = permission was granted
                 localStorage.setItem('fcmToken', window.__FCM_TOKEN__);
             }
 
@@ -225,7 +227,7 @@ export function PushNotificationProvider({ children }) {
         fcmToken,
         permissionStatus,
         isNative,
-        isPushEnabled: permissionStatus === 'granted' && !!fcmToken,
+        isPushEnabled: (permissionStatus === 'granted' || !!fcmToken) && !!fcmToken,
         requestPermission,
         unregisterDevice,
     };
