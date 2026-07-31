@@ -100,7 +100,10 @@ export function SubscriptionProvider({ children }) {
         return () => unsubscribe();
     }, [user]);
 
-    const isPro = subscription?.status === 'active';
+    // Admin accounts always get Pro access
+    const ADMIN_EMAILS = ['patrickrv3@gmail.com'];
+    const isAdmin = ADMIN_EMAILS.includes(user?.email);
+    const isPro = isAdmin || subscription?.status === 'active';
 
     // ── Native IAP Purchase (RevenueCat) ─────────────────────────────────────
     const purchasePro = useCallback(async () => {
