@@ -152,7 +152,7 @@ export function SubscriptionProvider({ children }) {
             alert('Purchase failed. Please try again.');
             return false;
         }
-    }, []);
+    }, [user]);
 
     // ── Restore Purchases (Apple requirement) ────────────────────────────────
     const restorePurchases = useCallback(async () => {
@@ -184,7 +184,7 @@ export function SubscriptionProvider({ children }) {
             console.error('[RC] Restore error:', e);
             return false;
         }
-    }, []);
+    }, [user]);
 
     // ── Web Stripe Checkout ──────────────────────────────────────────────────
     const startCheckout = async () => {
