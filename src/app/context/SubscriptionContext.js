@@ -4,7 +4,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { useAuth } from './AuthContext';
 import { db } from '../lib/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { getApiBase } from '../lib/apiUrl';
 
 const SubscriptionContext = createContext({ isPro: false, subscription: null, loading: true });
@@ -124,9 +124,18 @@ export function SubscriptionProvider({ children }) {
             // Purchase the first available package (monthly pro)
             const pkg = currentOffering.availablePackages[0];
             const result = await RC.purchasePackage({ aPackage: pkg });
+            console.log('[RC] Purchase result:', JSON.stringify(result.customerInfo?.entitlements));
 
-            if (result.customerInfo?.entitlements?.active?.pro) {
-                console.log('[RC] Purchase successful — Pro active');
+            // Write Pro status directly to Firestore for immediate UI update
+            if (user?.uid) {
+                await setDoc(doc(db, 'users', user.uid, 'subscription', 'pro'), {
+                    status: 'active',
+                    plan: 'pro',
+                    store: 'app_store',
+                    activatedAt: Date.now(),
+                    updatedAt: Date.now(),
+                }, { merge: true });
+                console.log('[RC] Purchase successful — Firestore updated');
                 return true;
             }
 
@@ -149,11 +158,24 @@ export function SubscriptionProvider({ children }) {
 
         try {
             const result = await RC.restorePurchases();
-            if (result.customerInfo?.entitlements?.active?.pro) {
+            console.log('[RC] Restore result:', JSON.stringify(result.customerInfo?.entitlements));
+
+            // Check if any entitlement is active (entitlement name may vary)
+            const activeEntitlements = result.customerInfo?.entitlements?.active;
+            if (activeEntitlements && Object.keys(activeEntitlements).length > 0) {
+                if (user?.uid) {
+                    await setDoc(doc(db, 'users', user.uid, 'subscription', 'pro'), {
+                        status: 'active',
+                        plan: 'pro',
+                        store: 'app_store',
+                        activatedAt: Date.now(),
+                        updatedAt: Date.now(),
+                    }, { merge: true });
+                }
                 console.log('[RC] Restore successful — Pro active');
                 return true;
             }
-            console.log('[RC] Restore complete — no active Pro entitlement');
+            console.log('[RC] Restore complete — no active entitlement');
             return false;
         } catch (e) {
             console.error('[RC] Restore error:', e);
