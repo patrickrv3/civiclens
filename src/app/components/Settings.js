@@ -247,20 +247,7 @@ export default function Settings() {
                             <p style={{ fontSize: '0.85rem', color: 'var(--cl-gray-500)', marginBottom: '14px' }}>
                                 You have full access to State &amp; Local legislation and bill tracking notifications.
                             </p>
-                            {isNative ? (
-                                <button
-                                    onClick={() => window.open('https://apps.apple.com/account/subscriptions', '_blank')}
-                                    style={{
-                                        padding: '9px 18px', borderRadius: '10px',
-                                        border: '1px solid var(--cl-gray-200)',
-                                        background: '#fff', cursor: 'pointer',
-                                        fontSize: '0.85rem', fontWeight: 600,
-                                        color: 'var(--cl-gray-700)',
-                                    }}
-                                >
-                                    Manage in App Store →
-                                </button>
-                            ) : (
+                            {!isNative && (
                                 <button
                                     onClick={openPortal}
                                     style={{
