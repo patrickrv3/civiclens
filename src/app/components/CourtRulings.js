@@ -26,8 +26,7 @@ export default function CourtRulings() {
 
     const sentinelRef = useRef(null);
 
-    const isNative = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
-    const canSeeAll = isPro || isNative;
+    const canSeeAll = isPro;
 
     // Reset visible count when filters change
     useEffect(() => {
@@ -287,7 +286,7 @@ export default function CourtRulings() {
             )}
 
             {/* Upgrade Modal */}
-            {showUpgradeModal && !isNative && (
+            {showUpgradeModal && (
                 <UpgradeModal onClose={() => setShowUpgradeModal(false)} />
             )}
         </div>

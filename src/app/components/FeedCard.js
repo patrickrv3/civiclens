@@ -61,8 +61,7 @@ export default function FeedCard({ item, profile }) {
     const watching = isWatching(item.id);
 
     const handleWatch = async () => {
-        const native = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
-        if (!native && !isPro) {
+        if (!isPro) {
             setShowUpgrade(true);
             return;
         }
@@ -302,7 +301,7 @@ export default function FeedCard({ item, profile }) {
                 </button>
             </div>
         </article>
-        {showUpgrade && !(typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
+        {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
         </>
     );
 }
