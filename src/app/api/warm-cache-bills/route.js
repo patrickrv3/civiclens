@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
-import { sendPushToAllUsers } from '../../lib/firebase-admin';
+import { sendPushToAllUsers, sendPushToUser } from '../../lib/firebase-admin';
 
 export const maxDuration = 60;
 
@@ -352,5 +352,22 @@ export async function GET(request) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const result = await runBillScan();
+
+    // Alert admin via push if there are errors
+    if (result.errors?.length > 0) {
+        try {
+            const ADMIN_UID = 'ojipCKs0EqghCTIsxnOE3BE6Q6l2';
+            await sendPushToUser(
+                ADMIN_UID,
+                '🟡 Bills Cron Error',
+                `Scanned: ${result.totalScanned} | Warmed: ${result.billsWarmed}\n${result.errors.map(e => `• ${e}`).join('\n')}`,
+                { type: 'admin_alert' },
+                'general'
+            );
+        } catch (e) {
+            console.warn('[Bills] Admin push alert failed:', e.message);
+        }
+    }
+
     return NextResponse.json(result, !result.success && result.billsWarmed === 0 ? { status: 500 } : {});
 }

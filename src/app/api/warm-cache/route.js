@@ -302,27 +302,20 @@ export async function GET(request) {
         console.warn('[Cron] Failed to log health:', e.message);
     }
 
-    // ── Send webhook alert if there are errors ───────────────────────────────
-    const webhookUrl = process.env.CRON_ALERT_WEBHOOK;
-    if (webhookUrl && hasErrors) {
+    // ── Send push alert to admin if there are errors ──────────────────────────
+    const ADMIN_UID = 'ojipCKs0EqghCTIsxnOE3BE6Q6l2';
+    if (hasErrors) {
         try {
-            const alertBody = {
-                content: `⚠️ **Civisly Cron Alert** — ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })}\n` +
-                    `Status: ${allFailed ? '🔴 ALL FAILED' : '🟡 Partial failure'}\n` +
-                    `Bills: ${billsWarmed} warmed${billsError ? ' ❌' : ' ✅'}\n` +
-                    `EOs: ${eosWarmed} warmed${eosError ? ' ❌' : ' ✅'}\n` +
-                    `Rulings: ${rulingsWarmed} warmed${rulingsError ? ' ❌' : ' ✅'}\n` +
-                    `Push: ${pushSent} sent\n` +
-                    `Errors:\n${errors.map(e => `• ${e}`).join('\n')}`,
-            };
-            await fetch(webhookUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(alertBody),
-                signal: AbortSignal.timeout(5000),
-            });
+            const errorSummary = errors.map(e => `• ${e}`).join('\n');
+            await sendPushToUser(
+                ADMIN_UID,
+                allFailed ? '🔴 Cron Failed' : '🟡 Cron Partial Failure',
+                `EOs: ${eosWarmed}${eosError ? ' ❌' : ' ✅'} | Rulings: ${rulingsWarmed}${rulingsError ? ' ❌' : ' ✅'}\n${errorSummary}`,
+                { type: 'admin_alert' },
+                'general'
+            );
         } catch (e) {
-            console.warn('[Cron] Webhook alert failed:', e.message);
+            console.warn('[Cron] Admin push alert failed:', e.message);
         }
     }
 
