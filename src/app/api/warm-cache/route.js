@@ -73,8 +73,9 @@ export async function GET(request) {
 
     // ── 1. Warm court rulings (most time-sensitive, runs first) ─────────────
     try {
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
-            || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+        const host = request.headers.get('host') || 'www.civisly.com';
+        const protocol = host.includes('localhost') ? 'http' : 'https';
+        const baseUrl = `${protocol}://${host}`;
         const rulingsRes = await fetch(`${baseUrl}/api/court-rulings`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-internal-cron': 'true' },
@@ -251,8 +252,9 @@ export async function GET(request) {
     // ── 5. Trigger watched-bill status check (non-blocking) ──────────────────
     let watchedCheckResult = null;
     try {
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
-            || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+        const host2 = request.headers.get('host') || 'www.civisly.com';
+        const protocol2 = host2.includes('localhost') ? 'http' : 'https';
+        const baseUrl = `${protocol2}://${host2}`;
 
         // Only trigger if we have time left (< 50s elapsed)
         if (Date.now() - startTime < 50000) {
