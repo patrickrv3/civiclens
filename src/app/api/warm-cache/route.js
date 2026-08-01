@@ -60,6 +60,7 @@ export async function GET(request) {
     };
 
     let billsWarmed = 0;
+    const startTime = Date.now();
     let eosWarmed = 0;
     let rulingsWarmed = 0;
     let rulingsItems = []; // Store rulings for push notification detection
@@ -72,9 +73,8 @@ export async function GET(request) {
 
     // ── 1. Warm court rulings (most time-sensitive, runs first) ─────────────
     try {
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.VERCEL_URL
-            ? `https://${process.env.VERCEL_URL}`
-            : 'http://localhost:3000';
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
+            || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
         const rulingsRes = await fetch(`${baseUrl}/api/court-rulings`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-internal-cron': 'true' },
@@ -101,7 +101,7 @@ export async function GET(request) {
     try {
         const frUrl = 'https://www.federalregister.gov/api/v1/documents.json' +
             '?conditions[type][]=PRESDOCU&conditions[presidential_document_type][]=executive_order' +
-            '&per_page=10&order=newest&fields[]=document_number,title,abstract,signing_date,html_url,executive_order_number';
+            '&per_page=10&order=newest&fields[]=document_number&fields[]=title&fields[]=abstract&fields[]=signing_date&fields[]=html_url&fields[]=executive_order_number';
         const frRes = await fetch(frUrl, { signal: AbortSignal.timeout(12000) });
         if (frRes.ok) {
             const frData = await frRes.json();
@@ -251,12 +251,11 @@ export async function GET(request) {
     // ── 5. Trigger watched-bill status check (non-blocking) ──────────────────
     let watchedCheckResult = null;
     try {
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.VERCEL_URL
-            ? `https://${process.env.VERCEL_URL}`
-            : 'http://localhost:3000';
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
+            || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
         // Only trigger if we have time left (< 50s elapsed)
-        if (Date.now() - Date.now() < 50000) { // always true, but keeping the pattern
+        if (Date.now() - startTime < 50000) {
             const watchRes = await fetch(`${baseUrl}/api/check-watched-and-notify`, {
                 method: 'POST',
                 headers: {
