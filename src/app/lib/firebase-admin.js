@@ -143,20 +143,21 @@ export async function sendPushToUser(uid, title, body, data = {}, category = 'ge
 export async function sendPushToAllUsers(title, body, data = {}) {
     const db = getAdminDb();
 
-    // Get all users who have device tokens
-    const usersSnap = await db.collectionGroup('devices')
-        .where('enabled', '==', true)
-        .get();
+    // Get all users, then check each for device tokens
+    // (Avoids collectionGroup query which requires a Firestore index)
+    const usersSnap = await db.collection('users').get();
 
-    // Group tokens by user UID
-    const userTokens = {};
-    usersSnap.docs.forEach(doc => {
-        const uid = doc.ref.parent.parent.id;
-        if (!userTokens[uid]) userTokens[uid] = [];
-        userTokens[uid].push(doc.data().token);
-    });
+    const userIds = [];
+    for (const userDoc of usersSnap.docs) {
+        const devicesSnap = await userDoc.ref.collection('devices')
+            .where('enabled', '==', true)
+            .limit(1) // Just need to know if they have any
+            .get();
+        if (!devicesSnap.empty) {
+            userIds.push(userDoc.id);
+        }
+    }
 
-    const userIds = Object.keys(userTokens);
     let totalSent = 0;
     let totalFailed = 0;
 
