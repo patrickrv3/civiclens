@@ -434,7 +434,7 @@ export async function GET(request) {
 
                 if (pick) {
                     const pushResult = await sendPushToAllUsers(
-                        `${pick.emoji} Daily Highlight`,
+                        'Daily Highlight',
                         pick.title,
                         { type: 'daily_highlight', id: pick.id }
                     );
