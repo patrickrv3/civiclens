@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
-import { sendPushToAllUsers } from '../../lib/firebase-admin';
+import { sendPushToAllUsers, sendPushToUser } from '../../lib/firebase-admin';
 
 export const maxDuration = 60;
 
@@ -316,6 +316,122 @@ export async function GET(request) {
             );
         } catch (e) {
             console.warn('[Cron] Admin push alert failed:', e.message);
+        }
+    }
+
+    // ── 7. Daily highlight notification ──────────────────────────────────────
+    // Picks the most high-profile item across all categories and sends one
+    // push notification per day to all users.
+    if (Date.now() - startTime < 55000) { // Only if we have time budget
+        try {
+            const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+            const lastHighlightSnap = await getDoc(doc(db, 'cronHealth', 'lastDailyHighlight'));
+            const lastDate = lastHighlightSnap.exists() ? lastHighlightSnap.data().date : null;
+
+            if (lastDate !== today) {
+                const candidates = [];
+
+                // ── Court rulings (already in memory) ────────────────────────
+                for (const r of rulingsItems) {
+                    let score = 0;
+                    if (r.courtType === 'scotus') score = 60;
+                    else if (r.courtType === 'federal_appeals') score = 25;
+                    else score = 10;
+                    if (r.profileLevel === 'High Profile') score += 15;
+                    else if (r.profileLevel === 'Notable') score += 8;
+                    if (r.impactLevel === 'High Impact') score += 10;
+                    else if (r.impactLevel === 'Moderate Impact') score += 5;
+
+                    candidates.push({
+                        id: r.id, score,
+                        title: r.shortTitle || r.originalTitle || 'New Court Ruling',
+                        body: (r.generalSummary || '').slice(0, 120),
+                        emoji: '⚖️',
+                    });
+                }
+
+                // ── Latest Executive Order (1-2 Firestore reads) ─────────────
+                try {
+                    const eoSnap = await getDoc(doc(db, 'cronHealth', 'lastEoIds'));
+                    if (eoSnap.exists()) {
+                        const topEoId = (eoSnap.data().ids || [])[0];
+                        if (topEoId) {
+                            const eoCached = await getDoc(doc(db, 'billSummaries', topEoId));
+                            if (eoCached.exists()) {
+                                const eo = eoCached.data();
+                                candidates.push({
+                                    id: topEoId, score: 50,
+                                    title: eo.shortTitle || eo.originalTitle || 'Executive Order',
+                                    body: (eo.generalSummary || '').slice(0, 120),
+                                    emoji: '📜',
+                                });
+                            }
+                        }
+                    }
+                } catch (e) { console.warn('[Daily] EO lookup failed:', e.message); }
+
+                // ── Top bill from feed index (1-2 Firestore reads) ───────────
+                try {
+                    const feedSnap = await getDoc(doc(db, 'feedIndex', 'latestBills'));
+                    if (feedSnap.exists()) {
+                        const bills = feedSnap.data().bills || [];
+                        const statusScore = {
+                            'Signed into Law': 55, 'Passed Both Chambers': 45,
+                            'Presented to President': 40, 'Passed Senate': 35,
+                            'Passed House': 30, 'Reported': 20,
+                        };
+                        // Find the most significant bill
+                        let bestBill = null;
+                        let bestScore = 0;
+                        for (const b of bills.slice(0, 50)) {
+                            const s = statusScore[b.status] || 5;
+                            if (s > bestScore) { bestBill = b; bestScore = s; }
+                        }
+                        if (bestBill) {
+                            const billCached = await getDoc(doc(db, 'billSummaries', bestBill.id));
+                            if (billCached.exists()) {
+                                const data = billCached.data();
+                                if (data.impactLevel === 'High Impact') bestScore += 10;
+                                candidates.push({
+                                    id: bestBill.id, score: bestScore,
+                                    title: data.shortTitle || data.originalTitle || bestBill.title,
+                                    body: (data.generalSummary || '').slice(0, 120),
+                                    emoji: '📋',
+                                });
+                            }
+                        }
+                    }
+                } catch (e) { console.warn('[Daily] Bill lookup failed:', e.message); }
+
+                // ── Pick the best candidate (avoid yesterday's pick) ─────────
+                const lastId = lastHighlightSnap.exists() ? lastHighlightSnap.data().itemId : null;
+                candidates.sort((a, b) => b.score - a.score);
+                const pick = candidates.find(c => c.id !== lastId) || candidates[0];
+
+                if (pick) {
+                    const result = await sendPushToAllUsers(
+                        `${pick.emoji} Daily Highlight`,
+                        pick.title,
+                        { type: 'daily_highlight', id: pick.id }
+                    );
+                    pushSent += result.totalSent;
+
+                    await setDoc(doc(db, 'cronHealth', 'lastDailyHighlight'), {
+                        date: today,
+                        itemId: pick.id,
+                        itemTitle: pick.title,
+                        itemEmoji: pick.emoji,
+                        score: pick.score,
+                        totalCandidates: candidates.length,
+                        sentAt: new Date().toISOString(),
+                    });
+                    console.log(`[Daily] Sent: ${pick.emoji} ${pick.title} (score: ${pick.score}, candidates: ${candidates.length})`);
+                }
+            } else {
+                console.log('[Daily] Highlight already sent today');
+            }
+        } catch (e) {
+            console.warn('[Daily] Daily highlight failed:', e.message);
         }
     }
 
