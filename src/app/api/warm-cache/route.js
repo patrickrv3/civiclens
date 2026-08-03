@@ -157,7 +157,7 @@ export async function GET(request) {
             // Reconstruct current EO IDs from the Federal Register fetch
             const frUrl2 = 'https://www.federalregister.gov/api/v1/documents.json' +
                 '?conditions[type][]=PRESDOCU&conditions[presidential_document_type][]=executive_order' +
-                '&per_page=10&order=newest&fields[]=document_number,title,executive_order_number';
+                '&per_page=10&order=newest&fields[]=document_number&fields[]=title&fields[]=executive_order_number';
             try {
                 const frRes2 = await fetch(frUrl2, { signal: AbortSignal.timeout(5000) });
                 if (frRes2.ok) {
