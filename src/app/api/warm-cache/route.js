@@ -322,6 +322,7 @@ export async function GET(request) {
     // ── 7. Daily highlight notification ──────────────────────────────────────
     // Picks the most high-profile item across all categories and sends one
     // push notification per day to all users.
+    let dailyHighlight = { status: 'skipped', reason: 'time_budget_exceeded' };
     if (Date.now() - startTime < 55000) { // Only if we have time budget
         try {
             const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
@@ -329,6 +330,7 @@ export async function GET(request) {
             const lastDate = lastHighlightSnap.exists() ? lastHighlightSnap.data().date : null;
 
             if (lastDate !== today) {
+                dailyHighlight = { status: 'running', lastDate, today };
                 const candidates = [];
 
                 // ── Court rulings (already in memory) ────────────────────────
@@ -409,12 +411,20 @@ export async function GET(request) {
                 const pick = candidates.find(c => c.id !== lastId) || candidates[0];
 
                 if (pick) {
-                    const result = await sendPushToAllUsers(
+                    const pushResult = await sendPushToAllUsers(
                         `${pick.emoji} Daily Highlight`,
                         pick.title,
                         { type: 'daily_highlight', id: pick.id }
                     );
-                    pushSent += result.totalSent;
+                    pushSent += pushResult.totalSent;
+                    dailyHighlight = {
+                        status: 'sent',
+                        pick: pick.title,
+                        emoji: pick.emoji,
+                        score: pick.score,
+                        candidates: candidates.length,
+                        pushResult: { totalUsers: pushResult.totalUsers, totalSent: pushResult.totalSent, totalFailed: pushResult.totalFailed },
+                    };
 
                     await setDoc(doc(db, 'cronHealth', 'lastDailyHighlight'), {
                         date: today,
@@ -428,9 +438,11 @@ export async function GET(request) {
                     console.log(`[Daily] Sent: ${pick.emoji} ${pick.title} (score: ${pick.score}, candidates: ${candidates.length})`);
                 }
             } else {
+                dailyHighlight = { status: 'already_sent_today' };
                 console.log('[Daily] Highlight already sent today');
             }
         } catch (e) {
+            dailyHighlight = { status: 'error', message: e.message };
             console.warn('[Daily] Daily highlight failed:', e.message);
         }
     }
@@ -442,6 +454,7 @@ export async function GET(request) {
         eosWarmed,
         rulingsWarmed,
         pushSent,
+        dailyHighlight,
         errors,
         timestamp: new Date().toISOString(),
     }, allFailed ? { status: 500 } : {});
