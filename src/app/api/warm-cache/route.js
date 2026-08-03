@@ -343,6 +343,12 @@ export async function GET(request) {
                 // ── Court rulings (already in memory) ────────────────────────
                 const now = new Date();
                 for (const r of rulingsItems) {
+                    // Hard cutoff: only consider items from the last 14 days
+                    if (r.date) {
+                        const daysOld = (now - new Date(r.date)) / (1000 * 60 * 60 * 24);
+                        if (daysOld > 14) continue; // Skip old items entirely
+                    }
+
                     let score = 0;
                     if (r.courtType === 'scotus') score = 60;
                     else if (r.courtType === 'federal_appeals') score = 25;
@@ -352,13 +358,11 @@ export async function GET(request) {
                     if (r.impactLevel === 'High Impact') score += 10;
                     else if (r.impactLevel === 'Moderate Impact') score += 5;
 
-                    // Freshness bonus: items from last 3 days get +20, last week +10
+                    // Freshness bonus: newer items rank higher
                     if (r.date) {
                         const daysOld = (now - new Date(r.date)) / (1000 * 60 * 60 * 24);
                         if (daysOld <= 3) score += 20;
                         else if (daysOld <= 7) score += 10;
-                        else if (daysOld <= 14) score += 3;
-                        // Older than 14 days: no bonus
                     }
 
                     candidates.push({
@@ -426,7 +430,7 @@ export async function GET(request) {
                 const sentHistory = lastHighlightSnap.exists()
                     ? (lastHighlightSnap.data().sentIds || []) : [];
                 candidates.sort((a, b) => b.score - a.score);
-                const pick = candidates.find(c => !sentHistory.includes(c.id)) || candidates[0];
+                const pick = candidates.find(c => !sentHistory.includes(c.id));
 
                 if (pick) {
                     const pushResult = await sendPushToAllUsers(
@@ -444,8 +448,8 @@ export async function GET(request) {
                         pushResult: { totalUsers: pushResult.totalUsers, totalSent: pushResult.totalSent, totalFailed: pushResult.totalFailed },
                     };
 
-                    // Keep last 60 sent IDs to avoid repeats for ~2 months
-                    const updatedSentIds = [...sentHistory, pick.id].slice(-60);
+                    // Track all sent IDs permanently — no item is ever repeated
+                    const updatedSentIds = [...sentHistory, pick.id];
                     await setDoc(doc(db, 'cronHealth', 'lastDailyHighlight'), {
                         date: today,
                         itemId: pick.id,
@@ -457,6 +461,9 @@ export async function GET(request) {
                         sentAt: new Date().toISOString(),
                     });
                     console.log(`[Daily] Sent: ${pick.emoji} ${pick.title} (score: ${pick.score}, candidates: ${candidates.length})`);
+                } else {
+                    dailyHighlight = { status: 'no_unsent_candidates', candidates: candidates.length, alreadySent: sentHistory.length };
+                    console.log(`[Daily] No unsent candidates available (${candidates.length} candidates, ${sentHistory.length} already sent)`);
                 }
             } else {
                 dailyHighlight = { status: 'already_sent_today' };
