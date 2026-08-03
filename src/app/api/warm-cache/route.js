@@ -165,18 +165,25 @@ export async function GET(request) {
                     const currentEoIds = (frData2.results || []).map(o => `eo-${o.document_number || o.executive_order_number}`);
                     const newEos = currentEoIds.filter(id => !prevIds.includes(id));
 
-                    // Send push for each new EO
-                    for (const eoId of newEos) {
+                    // Only send if 1-3 new EOs (more than 3 means stale data, not real news)
+                    if (newEos.length > 0 && newEos.length <= 3) {
+                        // Send ONE notification for the most recent new EO
+                        const eoId = newEos[0];
                         const eoCached = await getDoc(doc(db, 'billSummaries', eoId));
                         if (eoCached.exists()) {
                             const eoData = eoCached.data();
+                            const title = newEos.length === 1
+                                ? 'New Executive Order'
+                                : `${newEos.length} New Executive Orders`;
                             const result = await sendPushToAllUsers(
-                                'New Executive Order',
+                                title,
                                 eoData.shortTitle || eoData.originalTitle || 'New executive order signed',
                                 { type: 'executive_order', id: eoId }
                             );
                             pushSent += result.totalSent;
                         }
+                    } else if (newEos.length > 3) {
+                        console.log(`[Push] Skipping EO flood: ${newEos.length} "new" EOs (likely stale comparison data)`);
                     }
 
                     // Save current IDs for next comparison
