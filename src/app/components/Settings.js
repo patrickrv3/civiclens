@@ -27,6 +27,8 @@ export default function Settings() {
     const { requestPermission, isPushEnabled, isNative, permissionStatus, fcmToken } = usePushNotifications();
     const [zip, setZip] = useState(profile.location?.zipCode || '');
     const [showSaved, setShowSaved] = useState(false);
+    const [pushLoading, setPushLoading] = useState(false);
+    const [pushError, setPushError] = useState(null);
     const saveTimeout = useRef(null);
 
     // Sync zip from profile when it loads
@@ -173,23 +175,41 @@ export default function Settings() {
                     {!isPushEnabled && (
                         <div style={{ padding: '12px 16px', marginBottom: '8px' }}>
                             <button
+                                disabled={pushLoading}
                                 onClick={async () => {
-                                    console.log('[Push] Button pressed, requesting permission...');
-                                    const result = await requestPermission();
-                                    console.log('[Push] Permission result:', result);
+                                    setPushError(null);
+                                    setPushLoading(true);
+                                    try {
+                                        if (permissionStatus === 'denied') {
+                                            window.location.href = 'app-settings:';
+                                        } else {
+                                            const result = await requestPermission();
+                                            if (!result) {
+                                                setPushError('Permission not granted. Go to iOS Settings → Civisly → Notifications to enable.');
+                                            }
+                                        }
+                                    } catch (e) {
+                                        setPushError('Something went wrong. Please try again.');
+                                        console.error('[Push] Button error:', e);
+                                    } finally {
+                                        setPushLoading(false);
+                                    }
                                 }}
                                 style={{
                                     width: '100%', padding: '12px', borderRadius: '10px',
-                                    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                                    background: pushLoading ? '#999' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
                                     color: '#fff', border: 'none', fontSize: '14px',
-                                    fontWeight: 600, cursor: 'pointer',
+                                    fontWeight: 600, cursor: pushLoading ? 'wait' : 'pointer',
+                                    opacity: pushLoading ? 0.7 : 1,
                                 }}
                             >
-                                {permissionStatus === 'denied' ? 'Enable in iOS Settings' : 'Enable Push Notifications'}
+                                {pushLoading ? 'Enabling...' : permissionStatus === 'denied' ? 'Open Settings to Enable Notifications' : 'Enable Push Notifications'}
                             </button>
-                            <div style={{ fontSize: '11px', color: '#999', marginTop: '6px', textAlign: 'center' }}>
-                                Status: {permissionStatus} | Native: {isNative ? 'yes' : 'no'} | Token: {fcmToken ? 'yes' : 'no'}
-                            </div>
+                            {pushError && (
+                                <div style={{ fontSize: '12px', color: '#ef4444', marginTop: '8px', textAlign: 'center' }}>
+                                    {pushError}
+                                </div>
+                            )}
                         </div>
                     )}
                     <div className={styles.toggleRow}>
