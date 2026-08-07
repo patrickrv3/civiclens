@@ -5,6 +5,7 @@ import { WatchedBillsProvider } from './context/WatchedBillsContext';
 import { SubscriptionProvider } from './context/SubscriptionContext';
 import { CourtRulingsProvider } from './context/CourtRulingsContext';
 import { PushNotificationProvider } from './context/PushNotificationContext';
+import SplashHider from './components/SplashHider';
 
 export const metadata = {
   title: 'Civisly — Your Personal Civic Assistant',
@@ -25,6 +26,7 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body>
         <AuthProvider>
+          <SplashHider />
           <PushNotificationProvider>
             <ProfileProvider>
               <SubscriptionProvider>

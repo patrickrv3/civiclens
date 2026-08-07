@@ -19,7 +19,8 @@ const config = {
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 2000,
+      launchShowDuration: 0,       // Don't auto-hide on a timer
+      launchAutoHide: false,        // JS will call SplashScreen.hide() when page is ready
       backgroundColor: '#ffffff',
       showSpinner: false,
     },
