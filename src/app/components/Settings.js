@@ -22,13 +22,14 @@ const POLICY_INTERESTS = [
 
 export default function Settings() {
     const { profile, updateProfile } = useProfile();
-    const { user, logOut } = useAuth();
+    const { user, logOut, deleteAccount } = useAuth();
     const { isPro, subscription, startCheckout, openPortal, purchasePro, isNative: isNativeSub } = useSubscription();
     const { requestPermission, isPushEnabled, isNative, permissionStatus, fcmToken } = usePushNotifications();
     const [zip, setZip] = useState(profile.location?.zipCode || '');
     const [showSaved, setShowSaved] = useState(false);
     const [pushLoading, setPushLoading] = useState(false);
     const [pushError, setPushError] = useState(null);
+    const [deleting, setDeleting] = useState(false);
     const saveTimeout = useRef(null);
 
     // Sync zip from profile when it loads
@@ -355,6 +356,38 @@ export default function Settings() {
                     <button className={styles.resetBtn} onClick={handleResetProfile}>
                         Reset All Preferences
                     </button>
+                    <div style={{ borderTop: '1px solid rgba(239,68,68,0.2)', marginTop: '16px', paddingTop: '16px' }}>
+                        <div className={styles.toggleRow}>
+                            <div className={styles.toggleInfo}>
+                                <div className={styles.toggleLabel}>Delete Account</div>
+                                <div className={styles.toggleDesc}>
+                                    Permanently delete your account, all your data, preferences, and watched bills. This action is irreversible.
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            className={styles.resetBtn}
+                            disabled={deleting}
+                            onClick={async () => {
+                                if (!window.confirm('Are you sure you want to permanently delete your account? All your data will be erased. This cannot be undone.')) return;
+                                if (!window.confirm('This is your final confirmation. Your account and all associated data will be permanently deleted.')) return;
+                                setDeleting(true);
+                                try {
+                                    await deleteAccount();
+                                    // User is now signed out and data is deleted
+                                } catch (e) {
+                                    console.error('[Settings] Delete account failed:', e);
+                                    alert(e.message === 'auth/requires-recent-login'
+                                        ? 'For security, please sign out, sign back in, and try again.'
+                                        : 'Failed to delete account: ' + e.message);
+                                    setDeleting(false);
+                                }
+                            }}
+                            style={{ marginTop: '8px' }}
+                        >
+                            {deleting ? 'Deleting Account...' : 'Delete My Account'}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

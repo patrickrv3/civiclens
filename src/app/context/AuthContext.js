@@ -10,6 +10,7 @@ import {
     getRedirectResult,
     GoogleAuthProvider,
     signOut as firebaseSignOut,
+    deleteUser,
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 
@@ -62,8 +63,29 @@ export function AuthProvider({ children }) {
         return firebaseSignOut(auth);
     };
 
+    const deleteAccount = async () => {
+        if (!user) throw new Error('Not signed in');
+
+        // 1. Delete all user data from Firestore via server endpoint
+        const res = await fetch('/api/delete-account', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uid: user.uid }),
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Failed to delete account data');
+        }
+
+        // 2. Delete the Firebase Auth account
+        await deleteUser(user);
+
+        // 3. Clear local storage
+        localStorage.clear();
+    };
+
     return (
-        <AuthContext.Provider value={{ user, loading, redirectError, signUp, signIn, signInWithGoogle, logOut }}>
+        <AuthContext.Provider value={{ user, loading, redirectError, signUp, signIn, signInWithGoogle, logOut, deleteAccount }}>
             {children}
         </AuthContext.Provider>
     );
