@@ -73,9 +73,7 @@ export async function GET(request) {
 
     // ── 1. Warm court rulings (most time-sensitive, runs first) ─────────────
     try {
-        const host = request.headers.get('host') || 'www.civisly.com';
-        const protocol = host.includes('localhost') ? 'http' : 'https';
-        const baseUrl = `${protocol}://${host}`;
+        const baseUrl = 'https://www.civisly.com';
         const rulingsRes = await fetch(`${baseUrl}/api/court-rulings`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-internal-cron': 'true' },
